@@ -1,0 +1,503 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Cwd;
+use Getopt::Long;
+
+
+my %run; # storing information about the run
+
+# defining default directories to search
+my @default_dirs = ('/data/', '/data/MiSeq/','/bi/home/fkrueger/group/Run_Processing/');
+test_default_directories();
+
+my %valid_MiSeq_machines = (
+    'M02293' => 1,
+    );
+
+my %valid_HiSeq_machines = (
+    'D00436' => 1,
+    'SNL136' => 1,
+    );
+
+my %valid_NextSeq_machines = (
+    'NB501547' => 1,
+    'NS500606' => 1,
+    );
+
+########################################################################################
+
+### process commandline
+my ($miseq,$nextseq,$verbose,$force) = process_commandline();
+
+### Find and check run folder
+my $run_folder = shift @ARGV;
+my ($present,$full_run_folder) = find_run_folder ($run_folder);
+
+unless ($present){
+    die "Unable to find the specified run folder in the default locations, please respecify. Exiting...\n\n";
+}
+
+### Extracting run parameters from RunInfo.xml file
+warn "Reading RunInfo.xml file\n"; 
+$verbose and sleep(1);
+my $instrument = read_RunInfo_file();
+
+my $parent_dir = getcwd();
+unless ($parent_dir =~ /\/$/){
+    $parent_dir .= '/';
+}
+$verbose and warn "Parent directory: $parent_dir\n";
+
+### Decide if it is a MiSeq / HiSeq or NextSeq run
+warn "Determining run type\n";
+determine_run_type($instrument);
+sleep(1);
+
+### check if all cycles are present yet
+warn "Checking if all data is there yet\n";
+check_cycles();
+sleep(1);
+
+### if we are processing a MiSeq Run we need to rename SampleSheet.csv to SampleSheet.csv.old
+if ($miseq){
+    warn "Renaming sample sheet for MiSeq run\n";
+    $verbose and sleep(1);
+    rename_MiSeq_sample_sheet();
+}
+
+### Configure Run
+warn "Running the bcl2fastq configuration\n";
+$verbose and sleep(1);
+configure_bcl2fastq();
+
+unless ($nextseq) {
+		### Create Aligned Folder
+		warn "Creating 'Aligned' folder and subfolders\n";
+		$verbose and sleep(1);
+		create_Aligned_folder();
+
+    ### Run Make command
+		warn "Preparing to launch make command (run processing)\n";
+		$verbose and sleep(1);
+		run_make();
+
+
+		### Rename FastQ cluster files
+		warn "Renaming FastQ cluster files\n";
+		$verbose and sleep(1);
+		rename_fastq_cluster_files();
+}
+
+
+### Rename FastQ cluster files
+warn "Backing up run now. This might take a while....\n";
+$verbose and sleep(1);
+backup_run();
+
+warn "Processing and backup completed!\n\n";
+
+
+
+sub backup_run{
+		if ($nextseq) {
+				# For nextseq runs we'll have 4 fastq files per read in the Unaligned folder.
+				# We need to merge these together and also rename them and put them in a structure
+				# which looks similar to the MiSeq/HiSeq runs so that sierra will recognise them
+
+				chdir "${full_run_folder}/Unaligned" or die "Failed to move into folder: >${full_run_folder}/Unaligned. Not performing backup\n\n";
+				
+				system("mkdir -p /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/") == 0 or die "Failed to make /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/ : $!";
+
+				# Copy over the RunInfo.xml file as we'll need this later
+				system("cp ../RunInfo.xml /primary/${run_folder}/") == 0 or die "Failed to copy RunInfo.xml file";
+
+				# TODO: Fork this so we can copy them all in parallel
+				foreach my $read (qw(R1 R2 R3 R4)) {
+						my @files = <*_${read}_*>;
+
+						if (@files) {
+								unless (@files == 4) {
+										die "Got ".scalar @files." hits for $read but expected always to get 4";
+								}
+
+								my $command = "zcat @files | gzip -4 -c > /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/lane1_NoIndex_L001_${read}.fastq.gz";
+
+								$verbose and warn "Running '$command'\n";
+
+								warn "Backing up $read\n";
+
+								system($command) == 0 or die "Failed to back up $read for $run_folder";
+						}
+						else {
+								warn "Found no files for $read : Skipping\n";
+						}
+				}
+
+		}
+
+		else {
+				chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder. Not performing backup\n\n";
+				chdir ".." or die "Failed to move into folder: >..< Not performing backup\n\n";
+    
+				warn "Now backing up $run_folder\n";
+    
+				my $command = "tar cf - $run_folder --exclude=$run_folder/Data* --exclude=Temp --exclude=Thumbnail_Images --exclude=*.cif --exclude=*.bcl --exclude=*_pos.txt --exclude=*.clocs --exclude=$run_folder/Images* | (cd /primary/ && tar xfp -)";
+				$verbose and warn "Running command\n$command\n";
+				system($command) == 0 or die "Failed to back up $run_folder\n";
+		}
+}
+
+
+
+sub rename_fastq_cluster_files{
+    
+    chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
+    
+    my @folders = <Sample_lane*>;
+    foreach my $folder (@folders){
+	# warn "$folder\n";
+	chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}/$folder" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}/$folder<\n";
+	my @files = <*_001\.fastq\.gz>;
+	if (-e 'SampleSheet.csv'){
+	    unlink 'SampleSheet.csv' or warn "Failed to delete file 'SampleSheet.csv': $!\n";
+	    $verbose and warn "Removed file 'SampleSheet.csv' from '$folder'\n";
+	}
+	
+	foreach my $file (@files){
+	    my $newfile = $file;
+	    $newfile =~ s/_001\.fastq\.gz$/.fastq.gz/;
+	    if  (rename $file, $newfile){
+		$verbose and warn "Renamed '$file' to '$newfile'\n";
+	    }
+	    else{
+		$verbose and warn "Renaming from '$file' to '$newfile' failed: $!\n";
+	    }
+	}
+    }
+    
+    warn "Renaming complete\n\n";
+}
+
+sub run_make{
+    
+    chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder<. Processing cancelled.\n\n";
+    
+    ### Run make command
+    chdir "${full_run_folder}Unaligned/" or die "Failed to move into folder: >${full_run_folder}Unaligned/<. Processing cancelled.\n\n";
+    system ("make -j 14") == 0 or die "Failed to execute make command. Exit status was '$?'. Terminating\n";; 
+    
+    warn "Run processing completed\n\n";
+}
+
+sub create_Aligned_folder{
+    chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder<. Processing cancelled.\n\n";
+    
+    unless (-d 'Aligned'){
+	mkdir 'Aligned' or die "Failed to create folder 'Aligned'\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned\n";    
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}\n";    
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane1"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane1" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane1': $!\n"; 
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane1/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane2"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane2" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane2': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane2/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane3"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane3" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane3': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane3/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane4"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane4" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane4': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane4/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane5"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane5" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane5': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane5/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane6"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane6" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane6': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane6/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane7"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane7" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane7': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane7/\n";
+    }
+    unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane8"){
+	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane8" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane8': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane8/\n";
+    }
+    warn "Successfully created all folders in the Aligned section\n";
+    
+    chdir "$parent_dir" or die "Failed to move into folder: >$parent_dir<. Processing cancelled.\n\n";
+
+}
+
+sub read_RunInfo_file {
+    
+    unless (-e "${full_run_folder}RunInfo.xml"){
+	die "RunInfo.xml file did not exist in folder $full_run_folder. Exiting...\n\n";
+    }
+    $verbose and warn "Run folder found at '$full_run_folder', extracting run parameters from RunInfo.xml\n";
+    
+    open (IN,"${full_run_folder}RunInfo.xml") or die "Failed to read from RunInfo.xml: $!\n";
+
+    # discarding the xml version line
+    $_ = <IN>; # e.g. <?xml version="1.0"?>  warn "$_\n";
+    
+    # looking if the file is a proper run info file
+    $_ = <IN>; # e.g. <RunInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="2">  warn "$_\n";
+    die "You need to supply an Illumina RunInfo.xml file" unless ($_ =~ /^\<RunInfo/);
+    my $instrument;
+    while (<IN>){
+	if ($_ =~ /<Instrument>(.*)<\/Instrument>/){
+	    $instrument = $1;
+	    $verbose and warn "Extracted: $1\n";
+	    next;
+	}
+	if ($_ =~ /<Read/){
+	    # warn "$_";
+	    $_ =~ /NumCycles="(\d+)"/; 
+	    my $cycles = $1;
+	    
+	    $_ =~ /Number="(\d+)"/; 
+	    my $number = $1;
+	    
+	    $_ =~ /IsIndexedRead="(.{1})"/; 
+	    my $isIndexed = $1;
+	    next unless (defined $cycles and defined $number and $isIndexed);
+	    $verbose and warn "$cycles\t$number\t$isIndexed\n";
+	    $run{$number}->{indexed} = $isIndexed;
+	    $run{$number}->{cycles}  = $cycles;
+	}
+	
+	if ($_ =~ /<Run Id="(.+?)"/){
+	    # warn "$_";
+	    my $run_id = $1;
+	    # warn "$run_id\n\n"; sleep(1);
+	    $run{1}->{runID} = $run_id;
+	}
+	
+	if ($_ =~ /<Flowcell>(.*)<\/Flowcell>/){ # 	 <Flowcell>000000000-ABPDT</Flowcell>
+	    my $flowcell = $1;
+	    $verbose and warn "Extracted flowcell: $1\n";
+	    $run{1}->{flowcell} = $flowcell;
+	}
+	
+    }
+    $verbose and warn "RunID: $run{1}->{runID}\n";
+    $verbose and warn "Project folder (=flowcell): $run{1}->{flowcell}\n\n";    
+    sleep(1);
+    
+    $verbose and warn "Instrument was: $instrument\n\n";
+    return ($instrument);
+}
+
+
+
+### SUBROUTINES
+
+sub find_run_folder{
+    my $run_folder = shift;
+    my $found = 0;
+    my $full_run_folder;
+    if ($run_folder){
+	
+	unless ($run_folder =~ /\/$/){
+	    $run_folder .= '/';
+	}
+	warn "\nRun folder provided was: $run_folder\n";
+	
+	
+	foreach my $dir (@default_dirs){
+	    if (-d "$dir$run_folder"){
+		warn "Found run folder at > $dir$run_folder <. Processing...\n\n";
+		$found = 1;
+		$full_run_folder = "$dir$run_folder";
+		last;
+	    }
+	    else{
+		warn "No run folder at > $dir$run_folder <\n";
+	    }
+	}
+    }
+    else{
+	die "Please provide a run folder to proceed\n";
+    }
+    return ($found,$full_run_folder);
+}
+
+
+sub test_default_directories{
+    foreach (@default_dirs){
+	unless (-d){
+	    $verbose and warn "Default directory $_ did not exist! Please changing default dirs\n";
+	}
+	else{
+	    $verbose and warn "Default directory $_ does exist!!\n";
+	}
+    }
+}
+
+
+sub determine_run_type{
+    my $instrument = shift;
+    if ($miseq){ # set by user, proceeding 
+				$verbose and warn "Run set as: MiSeq (user defined)\n";
+    }
+		elsif ($nextseq) {
+				$verbose and warn "Run set as: NextSeq (user defined)\n";
+		}
+    else{
+				if (exists $valid_MiSeq_machines{$instrument} ){
+						$verbose and warn "Run set as: MiSeq (known MiSeq model >$instrument<)\n"; 
+						$miseq = 1;
+				}
+				elsif (exists $valid_HiSeq_machines{$instrument} ){
+						$verbose and warn "Run set as: HiSeq (known HiSeq model >$instrument<)\n"; 
+						$miseq = 0;
+				}
+				elsif (exists $valid_NextSeq_machines{$instrument} ){
+						$verbose and warn "Run set as: NextSeq (known NextSeq model >$instrument<)\n"; 
+						$nextseq = 1;
+				}
+				else {
+						$verbose and warn "Unknown instrument '$instrument' - guessing at HiSeq\n";
+				}
+    }
+    $verbose and sleep(1);
+}
+
+sub rename_MiSeq_sample_sheet{
+    ### rename SampleSheet.csv to SampleSheet.csv.old
+    
+    # rename OLDNAME,NEWNAME
+    if (-e "${full_run_folder}Data/Intensities/BaseCalls/SampleSheet.csv"){
+				$verbose and warn "SampleSheet.csv found\n";	
+				my $rename = rename "${full_run_folder}Data/Intensities/BaseCalls/SampleSheet.csv","${full_run_folder}Data/Intensities/BaseCalls/SampleSheet.csv.old";
+				if ($rename){
+						$verbose and warn "Successfully renamed >SampleSheet.csv< to >SampleSheet.csv.old<\n\n";	
+				}
+				else{
+						$verbose and warn "Failed to rename >SampleSheet.csv< to >SampleSheet.csv.old<\n\n";   
+				}
+    }
+    else{
+				$verbose and warn "No file SampleSheet.csv found, skipping\n\n";
+    }
+}
+
+sub check_cycles{
+    # it should be good enough to look in the L001 folder to see if the folder for the last base has been created already
+    my $lane_folder = "${full_run_folder}Data/Intensities/BaseCalls/L001/";
+    
+    my $last_cycle;
+    foreach my $number (keys %run){
+				$last_cycle += $run{$number}->{cycles};
+    }
+    my $last_folder = "C${last_cycle}.1";
+    
+    $verbose and warn "Last cycle was $last_cycle\n";
+    
+    if ($nextseq) {
+	my $last_cycle_file = sprintf("%04d",$last_cycle).".bcl.bgzf";
+
+	if (-e "${lane_folder}$last_cycle_file"){
+	    $verbose and warn "Last cycle file ($last_cycle_file) was present, safe to proceed\n\n";
+	}
+	else{
+	    die "Last cycle file ($last_cycle_file) was not present (maybe not yet?). Aborting processing\n\n";
+	}
+
+    }
+    else {
+	if (-d "${lane_folder}$last_folder"){
+	    $verbose and warn "Last cycle folder ($last_folder) was present, safe to proceed\n\n";
+	}
+	else{
+	    die "Last cycle folder ($last_folder) was not present (maybe not yet?). Aborting processing\n\n";
+	}
+    }
+}
+
+sub configure_bcl2fastq{
+    ### Configure the BCL to FASTQ conversion; convert bcl files (also .bcl.gz) to FastQ files
+
+		if ($nextseq) {
+				# NextSeq runs use a different bcl2fastq program to MiSeqs or HiSeqs
+				# so their process is completely different
+
+				my $bases_mask;
+				foreach my $number (sort keys %run){
+						$bases_mask .= "," if ($bases_mask);
+						$bases_mask .= "y*";
+				}
+
+				my $command = "bcl2fastq --runfolder-dir ${full_run_folder} --output-dir ${full_run_folder}/Unaligned --use-bases-mask $bases_mask --with-failed-reads --minimum-trimmed-read-length 0 --mask-short-adapter-reads 0 -p 16";
+				warn "Running the following command\n$command\n";
+    
+				system ($command) == 0 or die "Failed to execute bcl2fastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";				
+		}
+
+		else {
+				my $bases_mask;
+				foreach my $number (sort keys %run){
+						$bases_mask .= "y$run{$number}->{cycles},";
+				}
+
+				# deleting a trailing comma
+				$bases_mask =~ s/,$//;
+
+				my $overwrite = '';
+				if ($force){
+						$overwrite = '--force';
+				}
+    
+				# setting the maximum number of sequences per fastq cluster file to 1bn so that we don't have to run the combine_fastq script
+				my $command = "configureBclToFastq.pl $overwrite --fastq-cluster-count 1000000000 --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --with-failed-reads --force --use-bases-mask $bases_mask";
+				warn "Running the following command\n$command\n";
+    
+				system ($command) == 0 or die "Failed to execute configureBclToFastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";
+    }
+}
+
+
+sub process_commandline{
+    my $help;
+    my $miseq;
+		my $nextseq;
+    my $paired;
+    my $global_single;
+    my $global_paired;
+    my $verbose;
+    my $samtools_path;
+    my $bam;
+    my $rrbs;
+    my $force;
+    
+    my $command_line = GetOptions ('help' => \$help,
+																	 's|single' => \$global_single,
+																	 'p|paired' => \$global_paired,
+																	 'miseq' => \$miseq,
+																	 'nextseq' => \$nextseq,
+																	 'force' => \$force,
+																	 'samtools_path=s' => \$samtools_path,
+																	 'verbose' => \$verbose,
+																	 'barcode' => \$rrbs,
+				);
+    
+    die "Please respecify command line options\n\n" unless ($command_line);
+    
+    if ($help){
+				print_helpfile();
+				exit;
+    }
+
+    return ($miseq,$nextseq,$verbose,$force);
+}

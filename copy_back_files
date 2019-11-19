@@ -1,0 +1,166 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+
+# Written by Simon Andrews (simon.andrews@babraham.ac.uk)
+# Sept 2013
+
+my $debug = 0;
+my $force = 0;
+
+GetOptions(force => \$force,
+	   debug => \$debug) or die;
+
+my ($run_folder,@files) = @ARGV;
+
+unless ($run_folder) {
+
+    print <<"END_MESSAGE";
+This script will copy back a bunch of files from the same run to
+the appropriate folders in the /primary partition of the pipeline
+server.  It works out whether each file should be in an aligned or
+an unaligned folder and scps it back appropriately.
+
+In order to work without manual intervention it needs you to set
+up a valid SSH key between this machine and the pipeline server. In
+effect you need to append the contents of ~/.ssh/id_rsa.pub onto
+~/.ssh/authorized_keys of the SBSUser user on the pipeline server.
+
+Usage is copy_back_files [run_folder_name] [list of files]
+
+END_MESSAGE
+
+exit;
+}
+
+
+# Start by getting the name of the Project folder
+my $illumina = 'primary';
+my $project = `ssh SBSUser\@pipeline1 ls -d /${illumina}/${run_folder}/Unaligned/Project*`;
+
+if ($project !~ /Project/) {
+    # Try illumina1
+    $project = `ssh SBSUser\@pipeline1 ls -d /illumina1/${run_folder}/Unaligned/Project*`;
+    $illumina = 'illumina1';
+}
+
+chomp $project;
+
+warn "Raw project path is '$project'\n" if ($debug);
+
+if ($project =~ /(Project_[\w\-]+)/) {
+    $project = $1;
+}
+else {
+    die "Couldn't get a valid project name from $project\n";
+}
+
+warn "Extracted project is $project\n" if ($debug);
+
+foreach my $file (@files) {
+
+    warn "Processing $file\n";
+
+    unless (-e $file) {
+	warn "$file doesn't exist - skipping\n";
+	next;
+    }
+
+    if (-l $file) {
+	warn "Skipping $file as it's a symlink\n";
+	next;
+    }
+   
+    my $lane;
+    if ($file =~ /_L0+(\d+)_/) {
+	$lane = $1;
+    }
+    else {
+	warn "Couldn't find a lane number in $file - skipping\n";
+	next;
+    }
+
+    my $aligned = 0;
+
+    if ($file =~ /bismark/) {
+	$aligned = 1;
+    }
+    if ($file =~ /anaconda/i) {
+	$aligned = 1;
+    }
+    if ($file =~ /tophat/) {
+	$aligned = 1;
+    }
+    if ($file =~ /bowtie/) {
+	$aligned = 1;
+    }
+    if ($file =~ /.bam$/) {
+	$aligned = 1;
+    }
+    if ($file =~ /align_summary.txt$/) {
+	$aligned = 1;
+    }
+    if ($file =~ /hicup/i) {
+	$aligned = 1;
+    }
+    if ($file =~ /sicup/i) {
+	$aligned = 1;
+    }
+    if ($file =~ /chicago/i) {
+	$aligned = 1;
+    }
+    if ($file =~ /hisat/i) {
+	$aligned = 1;
+    }
+
+    warn "Aligned is $aligned\n" if ($debug);
+
+    my $path = "/$illumina/${run_folder}/Unaligned/${project}/Sample_lane${lane}";
+    if ($aligned) {
+	# We need to use the aligned folder and check that it exists
+
+	my $aligned_exists = `ssh SBSUser\@pipeline1 ls -d /$illumina/${run_folder}/Aligned/${project}/Sample_lane{$lane} 2>/dev/null`;
+	chomp $aligned_exists;
+
+	warn "Aligned exists = $aligned_exists\n" if ($debug);
+
+	unless ($aligned_exists) {
+
+	    my $command = "ssh SBSUser\@pipeline1 mkdir -p /$illumina/${run_folder}/Aligned/${project}/Sample_lane${lane}";
+
+	    warn "Running '$command'\n" if ($debug);
+
+	    system($command) == 0 or die "Failed to create /$illumina/${run_folder}/Aligned/${project}/Sample_lane{$lane}";
+
+	}
+
+
+	$path = "/$illumina/${run_folder}/Aligned/${project}/Sample_lane${lane}/";
+
+    }
+
+    # Check if the file already exists at the destination and don't copy it if it does
+
+    my $just_name = (split(/\//,$file))[-1];
+
+    warn "Just the name from $file is $just_name\n" if ($debug);
+
+    my $check_command = "ssh SBSUser\@pipeline1 ls -d ${path}/${just_name} 2>/dev/null";
+    
+    warn "Running '$check_command'\n" if ($debug);
+
+    my $filepath_exists = `$check_command`;
+
+    if ($filepath_exists and ! $force) {
+	warn "$file is already on the remote server - skipping\n";
+	next;
+    }
+
+    my $command = "scp -B -q -r $file SBSUser\@pipeline1:$path";
+
+    warn "Running '$command'\n" if ($debug);
+
+    system($command) == 0 or die "Failed to run 'ssh SBSUser\@pipeline1 $command'";
+
+}	

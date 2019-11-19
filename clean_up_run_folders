@@ -1,0 +1,408 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+
+my $base_location = "/primary/";
+my $immunity_data = '1607'; # in the format YearMonth. So '1607' would mean anything from July 2016 - present would be immune from cleaning up
+
+my ($yes_do_it) = process_commandline();
+
+my %total_savings;
+
+chdir ($base_location) or die "Can't move to $base_location: $!";
+
+my @run_folders = <*>;
+
+# We'll reverse the order to get some new folders first
+@run_folders = reverse(@run_folders);
+
+
+foreach my $folder (@run_folders) {
+    #	sleep(1);
+    warn "Looking at $folder\n";
+    if ($folder =~ /^18/){
+	warn "Folder is too new, skipping...\n";
+	next;
+    }
+    # last if ($folder =~ /^16/); # just temporary for testing
+ 
+    # TODO: Add in the Immunity Date
+    # Date:Manip 
+       
+    process_folder($folder);
+}
+
+warn "\nTOTAL SAVINGS\n";
+
+foreach my $case (sort keys %total_savings) {
+    my $saving = $total_savings{$case};
+    
+    # Express this in TB
+    $saving /= 1024**4;
+    
+    # Format it nicely
+    $saving = sprintf("%.2f",$saving);
+    
+    warn "\t$case\t$saving TB\n";
+    
+}
+warn "\n\n";
+
+
+sub process_illumina_folder {
+
+    my ($folder) = @_;
+    my %savings;
+    
+    # Do the unaligned data first
+    my ($project_folder) = <$folder/Unaligned/Project*>;
+
+    # We might want to prevent an entire runfolder from being cleaned. This may be done by adding "DoNotClean.flag"
+    # to the run folder much like the unanalysed.flag for Sierra alerts
+    if (-e "$folder/DoNotClean.flag"){
+	warn "Folder $folder contains a 'DoNotClean' flag, skipping this folder\n";
+	return;
+    }
+    
+    unless ($project_folder) {
+	warn "No project folder for $folder - giving up\n";
+	return;
+    }
+    
+    ### looking to see if there is a Data folder, which we can get rid of entirely
+    
+    my ($data_folder) = "${folder}/Data/";
+    if (-e $data_folder){
+	warn "Now looking at the size of the Data folder $data_folder...\n";
+	
+	my $size_Data = `du -sb $data_folder`;
+	chomp $size_Data;
+	warn "Data folder size: '$size_Data'\n";
+	$size_Data =~ /^(\d+)/;
+	$size_Data = $1;
+	$savings{'Data'} += $size_Data;
+	
+	### trying to make sure that there are no weird characters or spaces in the name
+	if ($data_folder =~ /\s+/){
+	    die "Found a white space! Aborting...\n\n";
+	}
+
+	if ($data_folder =~ /[\?\*]/){
+	    die "Found weird character in the path: Aborting...\n\n";
+	}
+	
+	# Actually delete the Data folder. Scary...
+	if ($yes_do_it){
+	    print "Deleting the Data folder '$data_folder' (size $size_Data bytes)\n";
+	    my $data_deleted = `rm -r $data_folder`;
+	    #  or die "Could not unlink file $trimmed_fastq: $!\n";
+	}   
+
+    }
+
+
+    else{
+	warn "Run folder did not contain a Data folder\n";
+    }
+    chdir $project_folder or die $!;
+    
+    # Now we find the samples for the run
+    
+    my @sample_folders = <Sample*>;
+    
+    unless (@sample_folders) {
+	warn "No samples for $folder - giving up\n";
+	return;
+    }
+
+    foreach my $sample (@sample_folders) {
+	next unless (-d $sample);
+	chdir $sample or die "Can't move into unaligned sample $sample in $folder: $!";
+	
+	# We might want to prevent a lane from being cleaned. This may be done by adding "DoNotClean.flag"
+	# to the Sample lane much like the unanalysed.flag for Sierra alerts
+	if (-e "DoNotClean.flag"){
+	    warn "Folder ${project_folder}/${sample} contains a 'DoNotClean' flag, skipping this folder\n";
+	    next; 
+	}
+	
+	# We can get rid of trimmed fastq files as long as the
+	# untrimmed version is still there.
+
+	# SINGLE-END FASTQ FILES
+	my @trimmed_fastqs = <*_trimmed.fq.gz>;
+	
+	foreach my $trimmed_fastq (@trimmed_fastqs) {
+	    my $untrimmed = $trimmed_fastq;
+	    $untrimmed =~ s/_trimmed.fq.gz/.fastq.gz/;
+	    
+	    die "Failed" if ($trimmed_fastq eq $untrimmed);
+	    
+	    if (-e $untrimmed) {
+		# We can get rid of this
+		$savings{trimmed_fastq} += (stat($trimmed_fastq))[7];
+		
+		# Actually delete the file
+		if ($yes_do_it){
+		    print "Deleting trimmed FastQ file $trimmed_fastq (size ",(stat($trimmed_fastq))[7]," bytes)\n";
+		    unlink $trimmed_fastq or die "Could not unlink file $trimmed_fastq: $!\n";
+		}
+	    }
+	    else{
+		warn "Found trimmed but no untrimmed file (for $trimmed_fastq). Skipping...\n";   
+	    }
+	}
+
+	# PAIRED-END FASTQ FILES
+	my @trimmed_fastqs_r1 = <*_val_1.fq.gz>;
+	my @trimmed_fastqs_r2 = <*_val_2.fq.gz>;
+
+	# Read 1
+	foreach my $trimmed_fastq (@trimmed_fastqs_r1) {
+	    my $untrimmed = $trimmed_fastq;
+	    $untrimmed =~ s/_val_1\.fq\.gz/.fastq.gz/;
+	    
+	    die "Failed" if ($trimmed_fastq eq $untrimmed);
+	    
+	    if (-e $untrimmed) {
+		# We can get rid of this
+		$savings{trimmed_fastq} += (stat($trimmed_fastq))[7]; # field 8 is total file size, in bytes
+		
+		# Actually delete the file
+		if ($yes_do_it){
+		    print "Deleting trimmed FastQ file $trimmed_fastq (size ",(stat($trimmed_fastq))[7]," bytes)\n";
+		    unlink $trimmed_fastq or die "Could not unlink file $trimmed_fastq: $!\n";
+		}
+	    }
+	    else{
+		warn "Found trimmed but no untrimmed file (for $trimmed_fastq). Skipping...\n";   
+	    }
+	}
+	# Read 2
+	foreach my $trimmed_fastq (@trimmed_fastqs_r2) {
+	    my $untrimmed = $trimmed_fastq;
+	    $untrimmed =~ s/_val_2\.fq\.gz/.fastq.gz/;
+	    
+	    die "Failed" if ($trimmed_fastq eq $untrimmed);
+	    
+	    if (-e $untrimmed) {
+		# We can get rid of this
+		$savings{trimmed_fastq} += (stat($trimmed_fastq))[7]; # field 8 is total file size, in bytes
+		
+		# Actually delete the file
+		if ($yes_do_it){
+		    print "Deleting trimmed FastQ file $trimmed_fastq (size ",(stat($trimmed_fastq))[7]," bytes)\n";
+		    unlink $trimmed_fastq or die "Could not unlink file $trimmed_fastq: $!\n";
+		}
+	    }
+	    else{
+		warn "Found trimmed but no untrimmed file (for $trimmed_fastq). Skipping...\n";   
+	    }
+	}
+	
+	
+	# If we have split files then we can get rid of the original unsplit fastq files.  
+	# This would mean that we could never go back to do any reprocessing, unless we hold on to the NoCode files
+	# March 2017: We are not going to do this in the first round but are only removing uncontentious files
+
+	my @fastq_files = <*fastq.gz>;
+	
+	my $split_count = 0;
+
+	# TODO: Can we be more specific about this?
+	foreach my $fastq_file (@fastq_files) {
+	    next if ($fastq_file =~ /NoIndex/);
+	    next if ($fastq_file =~ /NoCode/);
+	    ++$split_count;
+	}
+
+	if ($split_count) {
+	    # There are split files so we can delete the original
+	    # unsplit versions
+	    my @noindex_files = <*NoIndex*fastq.gz>;
+	    foreach my $file (@noindex_files) {
+		## TODO: Delete this file
+		$savings{unsplit_fastq} += (stat($file))[7];
+	    }
+	}
+
+
+	chdir ".." or die $!;
+
+
+    }
+
+    ## Looking at Aligned data now
+    chdir ($base_location) or die $!;
+    
+    ($project_folder) = <$folder/Aligned/Project*>;
+    
+    if ($project_folder) {
+	chdir ($project_folder) or die $!;
+
+	# Now we find the samples for the run
+	my @sample_folders = <Sample*>;
+	
+	unless (@sample_folders) {
+	    warn "No samples for $project_folder - giving up\n";
+	}
+	
+	foreach my $sample (@sample_folders) {
+	    next unless (-d $sample);
+	    chdir $sample or die "Can't move into unaligned sample $sample in $folder: $!";
+	   
+	    # We might want to prevent a lane from being cleaned. This may be done by adding "DoNotClean.flag"
+	    # to the Sample lane much like the unanalysed.flag for Sierra alerts
+	    if (-e "DoNotClean.flag"){
+		print "Folder ${project_folder}/${sample} contains a 'DoNotClean' flag, skipping this folder\n";
+		next;
+	    }
+ 
+	    # We can get rid of Bismark BAM files if the deduplicated BAM files are also present
+	    
+	    my @dedup_bismarks = <*deduplicated.bam>;
+	    
+	    foreach my $dedup_bismark (@dedup_bismarks) {
+		my $raw_bismark = $dedup_bismark;
+		$raw_bismark =~ s/deduplicated.bam/bam/;
+		
+		die "Failed to rename dedup_bismark to raw_bismark\n" if ($raw_bismark eq $dedup_bismark);
+		
+		if (-e $raw_bismark) {
+		    # We can get rid of this
+		    $savings{undedup_bismark} += (stat($raw_bismark))[7];
+		    
+		    # Actually delete the file
+		    if ($yes_do_it){
+			print "Deleting file $raw_bismark (size ",(stat($raw_bismark))[7]," bytes)\n";
+			unlink $raw_bismark or die "Could not unlink file $raw_bismark: $!\n";
+		    }
+		}
+	    }
+	    
+	    # We can get rid of CHH or CHG methylation call files
+	    my @non_cg_files = <CH[HG]_*.txt*>;
+	    foreach my $non_cg_file (@non_cg_files) {
+		$savings{non_cg_calls} += (stat($non_cg_file))[7];
+		
+		# Actually delete the file
+		if ($yes_do_it){
+		    print "Deleting file $non_cg_file (size ",(stat($non_cg_file))[7]," bytes)\n";
+		    unlink $non_cg_file or die "Could not unlink file $non_cg_file: $!\n";
+		}
+
+	    }
+
+	    # We can get rid of CpG methylation call files if the
+	    # corresponding cov.gz file is there as well.
+
+	    my @cov_files = <*bismark*.cov*>;
+	    if (@cov_files) {
+		my @cpg_files = <CpG_*txt*>; #.txt or .txt.gz
+		foreach my $cpg_file (@cpg_files) {
+		    $savings{cpg_calls} += (stat($cpg_file))[7];
+		    
+		    # TODO: This needs some more working out of file names, maybe not in the first round
+		    
+		}
+	    }
+
+	    # We can get rid of all bismark bedGraph files
+	    my @bedgraph_files = <*bismark*bedGraph*>;
+	    foreach my $bedgraph_file (@bedgraph_files) {
+		$savings{bedgraph} += (stat($bedgraph_file))[7];
+		
+		# Delete the file
+		if ($yes_do_it){
+		    print "Deleting file $bedgraph_file (size ",(stat($bedgraph_file))[7]," bytes)\n";
+		    unlink $bedgraph_file or die "Could not unlink file $bedgraph_file: $!\n";
+		}
+	    }
+
+
+	    chdir("..") or die $!;
+	}
+    }
+
+    # Print out the results of the savings
+    warn "Savings for $folder\n";
+
+    foreach my $case (sort keys %savings) {
+	my $saving = $savings{$case};
+
+	$total_savings{$case} += $saving;
+
+	# Express this in GB
+	$saving /= 1024**3;
+
+	# Format it nicely
+	$saving = sprintf("%.2f",$saving);
+
+	warn "\t$case\t$saving GB\n";
+
+    }
+    warn "\n\n";
+
+
+}
+
+
+sub process_folder {
+    
+    my ($folder) = @_;
+    
+    chdir $base_location or die "Can't move back to base folder:$!\n";
+    
+    # See if this is an illumina folder
+    if (-e "$folder/Unaligned") {
+	process_illumina_folder($folder);
+    } 
+    else {
+	warn "No $folder/Unaligned - don't understand the structure\n";
+    }
+    
+}
+
+
+sub process_commandline{
+
+    my $help;
+    my $yes_do_it;
+    my $command_line = GetOptions('help'   => \$help,
+				  'delete' => \$yes_do_it,
+        );
+    
+    die "Please respecify command line options\n\n" unless ($command_line);
+    
+    if ($help){
+	print_helpfile();
+	exit;
+    }
+
+    return ($yes_do_it);
+
+}
+
+
+
+
+sub print_helpfile{
+    print "\n",'='x111,"\n";
+    print "\nThis script is supposed to remove unnecessary or redundant files from seqfac in a bid to free up valuable space\n";
+    print "It cycles through all run folders that are half a year old or older and identifies classes of files that may be\nremoved. To prevent a folder from being cleaned up, the flag 'DoNotClean.flag' may be added to the top level of\na run folder\n\n";
+    print "Files we are currently looking for and deleting are:\n - Bismark bedGraph files (with or w/o .gz)\n - non-CG methylation calls\n - undeduplicated Bismark BAM files (if deduplicated BAM file is still there)\n\n";
+    print "Files we are currently only looking for (but NOT removing) are:\n - trimmed FastQ files\n - unsplit FastQ files (currently only listing and not deleting)\n - CpG methylation calls (if coverage file was present)\n\n\n";    
+
+    print '='x111,"\n\n";
+    print ">>> USAGE: ./clean_up_run_folders [--delete]<<<\n\n";
+    
+    print "--delete\t\tPerform the actual deletion and not just do a dry run. HANDLE WITH CARE!!!\n";
+    print "--help\t\t\tPrint this help and exit\n\n";
+    
+    print '='x111,"\n\n";
+    
+    print "This script was last modified on 10 April 2017\n\n";
+}
+
+
