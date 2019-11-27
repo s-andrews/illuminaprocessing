@@ -6,7 +6,7 @@ use DBI;
 my $data_folder = "/bi/seqfac/seqfac";
 my $working_folder = "/bi/scratch/run_processing";
 
-my $cf_path = '/bi/apps/clusterflow/0.4_devel/cf';
+my $cf_path = '/bi/apps/clusterflow/0.6_devel/cf';
 my $copy_back_files_path = '/bi/apps/copy_back_files/0.1/copy_back_files';
 
 my %pipeline_mappings = (
@@ -37,17 +37,17 @@ my %pipeline_mappings = (
 my ($run_folder,@lanes) = @ARGV;
 
 unless ($run_folder) {
-    die "Usage is analyse_run_folder [run_folder] [list of lanes (optional - default all)]\n";
+    die "Usage is analyse_run_folder_headstone [run_folder] [list of lanes (optional - default all)]\n";
 }
 
 if (@lanes) {
 
     my $warning = 0;
     foreach my $lane (@lanes) {
-				unless ($lane =~ /^\d+$/) {
-						warn "Invalid lane number '$lane'\n";
-						++$warning;
-				}
+		unless ($lane =~ /^\d+$/) {
+			warn "Invalid lane number '$lane'\n";
+			++$warning;
+		}
     }
 
     die "Please fix lane ids and retry\n" if ($warning);
@@ -64,15 +64,15 @@ unless ($dbh) {
 }
 
 # Make a working folder for the run
-mkdir("$working_folder/$run_folder") or die "Can't make working folder $working_folder/$run_folder: $!";
+### TODO: Change back to "die"
+mkdir("$working_folder/$run_folder") or warn "Can't make working folder $working_folder/$run_folder: $!";
 chdir("$working_folder/$run_folder") or die "Can't move to $working_folder/$run_folder: $!";
 
 my %job_ids_to_wait_for;
 
 foreach my $lane (@lanes) {
     my $id = process_lane($run_folder,$lane);
-
-		$job_ids_to_wait_for{$lane} = $id;
+	$job_ids_to_wait_for{$lane} = $id;
 }
 
 
@@ -80,19 +80,19 @@ foreach my $lane (@lanes) {
 warn "Started waiting for jobs to complete at ".scalar localtime(time)."\n";
 while (1) {
 
-		my ($lane) = find_completed_lane();
+	my ($lane) = find_completed_lane();
+	# warn "Lane processing hasn't finished just yet...";
+	if ($lane) {
+		copy_back_lane($run_folder,$lane);
+	}
+	else {
+		sleep(10);
+	}
 
-		if ($lane) {
-				copy_back_lane($run_folder,$lane);
-		}
-		else {
-				sleep(10);
-		}
+	last unless (%job_ids_to_wait_for);
 
-		last unless (%job_ids_to_wait_for);
-
-		
 }
+
 warn "All jobs complete at ".scalar localtime(time)."\n";
 
 
@@ -101,31 +101,31 @@ sub process_lane {
 
     warn "Processing $run_folder lane $lane\n";
 
-		# First find out which pipeline and genome we're using
-		my ($pipeline,$genome) = get_pipeline($run_folder,$lane);
+	# First find out which pipeline and genome we're using
+	my ($pipeline,$genome) = get_pipeline($run_folder,$lane);
 
-		unless ($pipeline) {
-				warn "No pipeline specified for lane $lane, giving up\n";
-				return;
-		}
+	unless ($pipeline) {
+			warn "No pipeline specified for lane $lane, giving up\n";
+			return;
+	}
 
-		unless ($genome) {
-				warn "No genome found for automated analysis, giving up\n";
-		}
+	unless ($genome) {
+			warn "No genome found for automated analysis, giving up\n";
+	}
 
-		unless (exists $pipeline_mappings{$pipeline}) {
-				warn "No pipeline mapping for '$pipeline', giving up\n";
-				return;
-		}
+	unless (exists $pipeline_mappings{$pipeline}) {
+			warn "No pipeline mapping for '$pipeline', giving up\n";
+			return;
+	}
 
-		unless ($pipeline_mappings{$pipeline}) {
-				warn "No automated pipeline to analyse '$pipeline', giving up\n";
-				return;
-		}
+	unless ($pipeline_mappings{$pipeline}) {
+			warn "No automated pipeline to analyse '$pipeline', giving up\n";
+			return;
+	}
 
-		warn "Pipeline is $pipeline, Genome is $genome\n";
+	warn "Pipeline is $pipeline, Genome is $genome\n";
 
-		$pipeline = $pipeline_mappings{$pipeline};
+	$pipeline = $pipeline_mappings{$pipeline};
 
     my @barcodes = get_barcodes($run_folder,$lane);
 
@@ -136,119 +136,120 @@ sub process_lane {
 				# We just link in all of the extracted barcode files
 				@files_to_link = get_split_fastq_file_names($run_folder,$lane);
     }
-		else {
-				# We need to figure out which are the main reads and link in those
-				my %read_numbers = get_read_numbers_for_run_folder($run_folder);
-				if ($read_numbers{read_1}) {
-						push @files_to_link, get_fastq_file_name($run_folder,$lane,$read_numbers{read_1});
-				}
-
-				if ($read_numbers{read_2}) {
-						push @files_to_link, get_fastq_file_name($run_folder,$lane,$read_numbers{read_2});
-				}
+	else {
+		# We need to figure out which are the main reads and link in those
+		my %read_numbers = get_read_numbers_for_run_folder($run_folder);
+		if ($read_numbers{read_1}) {
+				push @files_to_link, get_fastq_file_name($run_folder,$lane,$read_numbers{read_1});
 		}
 
-		# Now we need to link these files into the working directory
-		foreach my $file (@files_to_link) {
-				warn "Linking $file\n";
-				my $just_file = (split(/\//,$file))[-1];
-				symlink($file,$just_file) or die "Can't symlink $file: $!";
-				push @linked_files, $just_file;
+		if ($read_numbers{read_2}) {
+				push @files_to_link, get_fastq_file_name($run_folder,$lane,$read_numbers{read_2});
 		}
+	}
+
+	# Now we need to link these files into the working directory
+	foreach my $file (@files_to_link) {
+		warn "Linking $file\n";
+		my $just_file = (split(/\//,$file))[-1];
+		symlink($file,$just_file) or die "Can't symlink $file: $!";
+		push @linked_files, $just_file;
+	}
 
 
-		# Now we can launch the clusterflow pipeline for these samples
-		# and collect the job ids which have been produced.
+	# Now we can launch the clusterflow pipeline for these samples
+	# and collect the job ids which have been produced.
 
-		my $job_id;
+	my $job_id;
+	#warn "Trying to run:\n$cf_path --genome $genome $pipeline @linked_files 2>&1 |";
+	
+	open (CF, "$cf_path --genome $genome $pipeline @linked_files 2>&1 |") or die "Can't open pipe to cf: $!";
 
-		open (CF, "$cf_path --genome $genome $pipeline @linked_files 2>&1 |") or die "Can't open pipe to cf: $!";
+	while (<CF>) {
+		warn "$_";
 
-		while (<CF>) {
-				warn "$_";
-
-				if (/Launching pipeline\s*(\S+)/) {
-						$job_id =$1;
-#						warn "Found pipeline $job_id";
-				}
+		if (/Launching pipeline\s*(\S+)/) {
+				$job_id =$1;
+				# warn "Found pipeline $job_id";
 		}
-		
-		close CF;
+	}
+	
+	close CF;
 
-		unless ($job_id) {
-				die "Failed to parse a job id from the last submission";
-		}
+	unless ($job_id) {
+		die "Failed to parse a job id from the last submission";
+	}
 
-		return ($job_id);
+	return ($job_id);
 
 }
 
 sub get_read_numbers_for_run_folder {
 
-		my ($run_folder) = @_;
+	my ($run_folder) = @_;
 
-		open (INFO,"$data_folder/$run_folder/RunInfo.xml") or die "Can't find $data_folder/$run_folder/RunInfo.xml: $!";
+	open (INFO,"$data_folder/$run_folder/RunInfo.xml") or die "Can't find $data_folder/$run_folder/RunInfo.xml: $!";
 
-		my $read_count = 1;
-		my $barcode_count = 1;
+	my $read_count = 1;
+	my $barcode_count = 1;
 
-		my %read_numbers;
+	my %read_numbers;
 
-		while (<INFO>) {
-				if (/Read Number="(\d+)" NumCycles="\d+" IsIndexedRead="([YN])"/) {
-						if ($2 eq 'Y') {
-								$read_numbers{"barcode_$barcode_count"} = $1;
-								++$barcode_count;
-						}
-						elsif ($2 eq 'N') {
-								$read_numbers{"read_$read_count"} = $1;
-								++$read_count;
-						}
-						else {
-								die "Didn't understand index $2";
-						}
-				}
-
-				# MiSeq RunInfo has a different structure
-				elsif (/Read NumCycles="\d+" Number="(\d+)" IsIndexedRead="([YN])"/) {
-						if ($2 eq 'Y') {
-								$read_numbers{"barcode_$barcode_count"} = $1;
-								++$barcode_count;
-						}
-						elsif ($2 eq 'N') {
-								$read_numbers{"read_$read_count"} = $1;
-								++$read_count;
-						}
-						else {
-								die "Didn't understand index $2";
-						}
-				}
-
+	while (<INFO>) {
+		if (/Read Number="(\d+)" NumCycles="\d+" IsIndexedRead="([YN])"/) {
+			if ($2 eq 'Y') {
+					$read_numbers{"barcode_$barcode_count"} = $1;
+					++$barcode_count;
+			}
+			elsif ($2 eq 'N') {
+					$read_numbers{"read_$read_count"} = $1;
+					++$read_count;
+			}
+			else {
+					die "Didn't understand index $2";
+			}
 		}
 
-		close INFO;
-
-		unless (%read_numbers) {
-				die "Found no valid read numbers from $data_folder/$run_folder/RunInfo.xml";
+		# MiSeq RunInfo has a different structure
+		elsif (/Read NumCycles="\d+" Number="(\d+)" IsIndexedRead="([YN])"/) {
+			if ($2 eq 'Y') {
+					$read_numbers{"barcode_$barcode_count"} = $1;
+					++$barcode_count;
+			}
+			elsif ($2 eq 'N') {
+					$read_numbers{"read_$read_count"} = $1;
+					++$read_count;
+			}
+			else {
+					die "Didn't understand index $2";
+			}
 		}
 
-		return %read_numbers;
+	}
+
+	close INFO;
+
+	unless (%read_numbers) {
+		die "Found no valid read numbers from $data_folder/$run_folder/RunInfo.xml";
+	}
+
+	return %read_numbers;
 
 }
 
 sub get_pipeline {
 
-		my ($run_folder,$lane) = @_;
+	my ($run_folder,$lane) = @_;
 
     my $sth = $dbh->prepare("select sample_type.name, search_database.assembly from run,lane,sample,sample_type,search_database where run.run_folder_name=? and run.flowcell_id=lane.flowcell_id and lane.lane_number=? and lane.sample_id=sample.id and sample.search_database_id=search_database.id and sample.sample_type_id=sample_type.id");
 
     $sth -> execute($run_folder,$lane) or die "Can't list barcodes for $run_folder, $lane: ".$dbh->errstr();
 		
-		my ($pipeline,$assembly) = $sth->fetchrow_array();
+	my ($pipeline,$assembly) = $sth->fetchrow_array();
 
-		return () unless ($pipeline); # There is no pipeline
+	return () unless ($pipeline); # There is no pipeline
 
-		return ($pipeline,$assembly);
+	return ($pipeline,$assembly);
 
 }
 
@@ -302,7 +303,7 @@ sub get_lanes {
     my $dir = "$data_folder/$run_folder";
 
     unless (-e $dir) {
-				die "Couldn't find the specified run folder at '$dir'\n";
+		die "Couldn't find the specified run folder at '$dir'\n";
     }
 
     my @lane_directories = <$dir/Unaligned/Project*/Sample_lane*>;
@@ -345,35 +346,43 @@ sub get_fastq_file_name {
 }
 
 sub get_split_fastq_file_names {
-		my ($run_folder,$lane) = @_;
+	my ($run_folder,$lane) = @_;
 
-		my @files = <$data_folder/$run_folder/Unaligned/Project*/Sample_lane$lane/lane*_L00${lane}_*.fastq.gz>;
+	my @files = <$data_folder/$run_folder/Unaligned/Project*/Sample_lane$lane/lane*_L00${lane}_*.fastq.gz>;
 
-		my @keepers;
+	my @keepers;
 
-		foreach (@files) {
-				next if (/NoCode/);
-				next if (/NoIndex/);
-				push @keepers,$_;
-		}
-
-		return @keepers;
+	foreach (@files) {
+		next if (/NoCode/);
+		next if (/NoIndex/);
+		push @keepers,$_;
+	}
+	
+	return @keepers;
 }
 
 sub find_completed_lane {
 
 		# Get the list of all outstanding job ids from qstat
-		open (QSTAT,"qstat -r | ") or die "Can't open pipe to qstat: $!";
+		open (SQUEUE,"squeue -a --format \%j | ") or die "Can't open pipe to squeue: $!";
+	
 
 		my %running_ids;
 
-		while (<QSTAT>) {
-				if (/Full jobname:\s*cf_(\S+_\d{8,})/) {
-						$running_ids{$1} = 1;
-				}
+		while (<SQUEUE>) {
+			chomp;
+			# warn "SQUEUE LINE: $_";	
+			if (/cf_(\S+_\d{8,})/) {
+				$running_ids{$1} = 1;
+			}
 		}
 
-		close QSTAT;
+		close SQUEUE;
+
+		#	warn "Outstanding job IDs:\n";
+		#	foreach my $os (keys %running_ids){
+		#		warn "Still outstanding: $os\n";
+		# }
 
 		# Now go through the jobs we're waiting for and see if any of their
 		# ids are still active
