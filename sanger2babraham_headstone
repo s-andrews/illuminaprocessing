@@ -1,0 +1,1292 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+# Adapted for use in headstone 17 12 2019
+
+my %truseq = get_barcodes();
+my %uni;
+foreach my $code(keys %truseq){
+    if (exists $uni{$code}){
+	warn "Arrgggggggggggggggg!! not unique!\n";
+    }
+    else{
+	$uni{$code}++;
+	# warn "$code\t$truseq{$code}\n"; sleep(1);
+    } 
+}
+
+my ($sample_sheet,@cram_files) = @ARGV;
+
+unless ($sample_sheet) {
+    die "Usage is sanger2babraham.pl [sample sheet (sampleID/barcode/name/lane)] [cram files]\n";
+}
+
+unless (@cram_files) {
+		# We just take all of the cram files in the current directory
+
+		@cram_files = <*.cram>;
+}
+
+my %samples = read_sample_sheet($sample_sheet);
+
+my @cram_to_convert;
+
+foreach my $file (@cram_files) {
+    
+    if (exists $samples{$file}) {
+				warn "Linked $file to $samples{$file}\n";
+				symlink($file,$samples{$file}) or die "Can't link $file to $samples{$file}: $!";
+				push @cram_to_convert,$samples{$file};
+				delete $samples{$file};
+    }
+
+    else {
+				warn "Skipping $file\n";
+    }
+
+}
+
+foreach my $cram (keys %samples) {
+    warn "Didn't find the file '$cram' which was in the sample sheet\n";
+}
+
+# Now we need to convert the cram files into fastq files
+
+# To do this we first need to convert from cram to sorted BAM and then
+# extract the fastq files from the BAM files
+
+# We'll limit how many files we'll process at once so as to not do bad things
+# to the clusters IO
+my $MAX_RUNS = 6;
+
+my @job_ids;
+
+my @bam_to_convert;
+
+while (1) {
+
+		if (@cram_to_convert) {
+			#print "members of \@cram_to_convert\n",join ("\n",@cram_to_convert),"\n";
+				# Try to launch a new job if we can
+				if (@job_ids < $MAX_RUNS) {
+						my $cram = shift (@cram_to_convert);
+						my $bam = $cram;
+						$bam =~ s/\.cram/.bam/;
+						warn "Converting $cram to $bam\n";
+						#	my $job_value = `qsub -o ${cram}_convert.log -S /bin/bash -l h_vmem=10G /bi/apps/samtools/1.2/samtools-1.2/samtools sort -n -O bam -T /state/partition1/temp.$cram  $cram -o $bam`;
+						# my $job_value = `echo \"samtools view -O bam -F 0x900 $cram | samtools sort -n -O bam -T /state/partition1/temp.$cram - -o $bam \" | qsub -S /bin/bash -b n -cwd -V -l h_vmem=10G -pe cores 2 -o ${cram}_convert.log -j y`;
+						# changed the samtools view -h -F ... step to write out BAM immediately. This is important as -h forces it to write a SAM file
+						# which samtools 1.2 and 1.3 corrupts and can't read it itself anymore. The developers are aware of this. 18 03 2016 Felix
+						# my $job_value = qsub -S /bin/bash;
+						# -T /state/partition1/temp.$cram
+						my $command = "samtools view -O bam -F 0x900 $cram | samtools sort -n -O bam  - -o $bam";
+	 					# warn "COMANND is:\n$command\n";
+						my $cluster_command = "ssub -c2 --mem=10G -o ${cram}_convert.log --email \"$command\"";
+						# warn "CLUSTER COMMAND is:\n$cluster_command\n";
+						my $job_value = `$cluster_command`;
+						# warn "Job Value is: $job_value";
+				
+						if ($job_value =~ /job (\d+)/) {
+								warn "Submitted job '$1'\n";
+								push @job_ids,$1;
+								push @bam_to_convert,$bam;
+								next;
+						}
+						else {
+								die "Failed to submit cram2bam conversion for $cram into $bam: $job_value";
+						}
+				}
+				else {
+						#warn "Maximum number of jobs: $MAX_RUNS\n";
+						#warn "Curent job IDs before checking:\n",join ("\n",@job_ids),"\n"; sleep(1);
+						@job_ids = find_expired_jobs(@job_ids);
+						# warn "Curent job IDs after checking:\n",join ("\n",@job_ids),"\n"; sleep(10);
+						sleep(10);
+						next;
+				}
+
+		}
+
+		# Wait for the rest of the conversions to finish
+		while (@job_ids) {
+				@job_ids = find_expired_jobs(@job_ids);
+				sleep(10);
+		}
+
+		last;
+		
+}
+
+# Now we need to turn the bam files into fastq files
+
+my @fastq_to_compress;
+
+while (1) {
+
+		if (@bam_to_convert) {
+				# Try to launch a new job if we can
+				if (@job_ids < $MAX_RUNS) {
+						my $bam = shift (@bam_to_convert);
+
+						my $fastq1 = $bam;
+						my $fastq2 = $bam;
+						$fastq1 =~ s/\.bam$/_R1.fastq/;
+						$fastq2 =~ s/\.bam$/_R2.fastq/;
+
+						warn "Converting $bam to $fastq1 and $fastq2\n";
+
+						my $command = "/bi/apps/java/jre1.7.0_45/bin/java -Xmx10g -XX:+UseG1GC -XX:ParallelGCThreads=2 -jar /bi/apps/picard/1.88/SamToFastq.jar VALIDATION_STRINGENCY=SILENT QUIET=true INPUT=$bam FASTQ=$fastq1 SECOND_END_FASTQ=$fastq2";
+						my $cluster_command = "ssub -o ${bam}_bam2fastq.log --mem=20G \"$command\"";
+						# my $job_value = `qsub -o ${bam}_bam2fastq.log -S /bin/bash -l h_vmem=20G $command`;
+						my $job_value = `$cluster_command`;
+
+						if ($job_value =~ /job (\d+)/) {
+								warn "Submitted job '$1'\n";
+								push @job_ids,$1;
+								push @fastq_to_compress,$fastq1,$fastq2;
+								next;
+						}
+						else {
+								die "Failed to submit bam2fastq conversion for $bam into $fastq1 and $fastq2: $job_value";
+						}
+				}
+
+				else {
+						@job_ids = find_expired_jobs(@job_ids);
+						sleep(10);
+						next;
+				}
+		}
+		
+		# Wait for the rest of the conversions to finish
+		while (@job_ids) {
+				@job_ids = find_expired_jobs(@job_ids);
+				sleep(10);
+		}
+
+		last;
+		
+}
+
+# Finally we need to compress fastq files.  If we have R2 fastq files with no data in
+# them then we'll delete them.
+
+while (1) {
+
+		if (@fastq_to_compress) {
+				# Try to launch a new job if we can
+				if (@job_ids < $MAX_RUNS) {
+						my $fastq = shift (@fastq_to_compress);
+
+						# If this is an empty R2 fastq then we can delete it (it was proabably
+						# a SE run
+
+						if ($fastq =~ /R2.fastq/ and (stat($fastq))[7] == 0) {
+								unlink($fastq) or die "Failed to delete empty file $fastq: $!";
+								next;
+						}
+
+						warn "Compressing $fastq\n";
+
+						my $command = "gzip $fastq";
+						my $cluster_command = "ssub -o ${fastq}_gzip.log --email \"$command\"";
+						# my $job_value = `qsub -o ${fastq}_gzip.log -S /bin/bash $command`;
+						my $job_value = `$cluster_command`;
+
+						if ($job_value =~ /job (\d+)/) {
+								warn "Submitted job '$1'\n";
+								push @job_ids,$1;
+								next;
+						}
+						else {
+								die "Failed to submit gzip for $fastq: $job_value";
+						}
+				}
+
+				else {
+						@job_ids = find_expired_jobs(@job_ids);
+						sleep(10);
+						next;
+				}
+		}
+		
+		# Wait for the rest of the conversions to finish
+		while (@job_ids) {
+				@job_ids = find_expired_jobs(@job_ids);
+				sleep(10);
+		}
+
+		last;
+		
+}
+
+
+
+
+sub find_expired_jobs {
+
+		my (@ids) = @_;
+
+		my @still_running_ids;
+
+		my %job_ids;
+		# open (QSTAT,"qstat |") or die "Can't open pipe to qstat";
+		# reading only the job IDs
+		open (SQUEUE,"squeue -a --format %.18i | ") or die "Can't open pipe to squeue: $!";
+	
+		while (<SQUEUE>) {
+			chomp;	
+			# warn "$_\n";
+			
+			if (/^\s*(\d+)/) {
+					$job_ids{$1} = 1;
+					
+			}
+		}
+
+		close SQUEUE;
+
+		foreach my $id (@ids) {
+			if (exists $job_ids{$id}) {
+					push @still_running_ids,$id;
+			}
+		}
+
+		return @still_running_ids;
+
+}
+
+
+
+sub read_sample_sheet {
+    my ($file) = @_;
+
+		my %sierra_file_handles;
+
+    open (IN,$file) or die $!;
+
+    my %samples;
+
+    my %dups;
+
+    while (<IN>) {
+				chomp;
+				s/[\r\n]//g;
+
+				next if (/^\#/);
+
+				my ($sample_id,$barcode,$name,$lane) = split(/\t/);
+				unless ($lane) {
+						warn "Not enough data from '$_'\n";
+						next;
+				}
+
+				unless (exists $truseq{$barcode}) {
+						warn "No truseq index for '$barcode'\n";
+						next;
+				}
+
+				my $cram = $sample_id."#".$barcode.".cram";
+
+				my $output = "lane${lane}_${name}_$truseq{$barcode}_L00${lane}_${sample_id}.cram";
+
+				if (exists $dups{$output}) {
+						die "Duplicate output file '$output' would be generated\n";
+				}
+
+				unless (exists $sierra_file_handles{$lane}) {
+						# We need to make an output file for this lane
+						my $outname = $file;
+						$outname =~ s/\.txt$//;
+						$outname .= "_sierra_lane${lane}.txt";
+
+						my $fh;
+						open ($fh,'>',$outname) or die "Can't write to $outname: $!";
+
+						$sierra_file_handles{$lane} = $fh;
+				}
+
+				my $usable_name = $name;
+				$usable_name =~ s/[^a-zA-Z0-9\.\-\_]+_*/_/g;
+
+				print {$sierra_file_handles{$lane}} join("\t",$usable_name,$truseq{$barcode}),"\n";
+
+				$samples{$cram} = $output;
+
+    }
+
+		foreach my $fh (values %sierra_file_handles) {
+				close $fh or die "Can't close filehandle: $!";
+		}
+
+    return %samples;
+}
+
+
+sub get_barcodes {
+    return(
+				1 =>  'ATCACGTT' ,
+				2 =>  'CGATGTTT' ,
+				3 =>  'TTAGGCAT' ,
+				4 =>  'TGACCACT' ,
+				5 =>  'ACAGTGGT' ,
+				6 =>  'GCCAATGT' ,
+				7 =>  'CAGATCTG' ,
+				8 =>  'ACTTGATG' ,
+				9 =>  'GATCAGCG' ,
+				10 =>  'TAGCTTGT' ,
+				11 =>  'GGCTACAG' ,
+				12 =>  'CTTGTACT' ,
+				13 =>  'TGGTTGTT' ,
+				14 =>  'TCTCGGTT' ,
+				15 =>  'TAAGCGTT' ,
+				16 =>  'TCCGTCTT' ,
+				17 =>  'TGTACCTT' ,
+				18 =>  'TTCTGTGT' ,
+				19 =>  'TCTGCTGT' ,
+				20 =>  'TTGGAGGT' ,
+				21 =>  'TCGAGCGT' ,
+				22 =>  'TGATACGT' ,
+				23 =>  'TGCATAGT' ,
+				24 =>  'TTGACTCT' ,
+				25 =>  'TGCGATCT' ,
+				26 =>  'TTCCTGCT' ,
+				27 =>  'TAGTGACT' ,
+				28 =>  'TACAGGAT' ,
+				29 =>  'TCCTCAAT' ,
+				30 =>  'TGTGGTTG' ,
+				31 =>  'TAGTCTTG' ,
+				32 =>  'TTCCATTG' ,
+				33 =>  'TCGAAGTG' ,
+				34 =>  'TAACGCTG' ,
+				35 =>  'TTGGTATG' ,
+				36 =>  'TGAACTGG' ,
+				37 =>  'TACTTCGG' ,
+				38 =>  'TCTCACGG' ,
+				39 =>  'TCAGGAGG' ,
+				40 =>  'TAAGTTCG' ,
+				41 =>  'TCCAGTCG' ,
+				42 =>  'TGTATGCG' ,
+				43 =>  'TCATTGAG' ,
+				44 =>  'TGGCTCAG' ,
+				45 =>  'TATGCCAG' ,
+				46 =>  'TCAGATTC' ,
+				47 =>  'TACTAGTC' ,
+				48 =>  'TTCAGCTC' ,
+				49 =>  'TGTCTATC' ,
+				50 =>  'TATGTGGC' ,
+				51 =>  'TTACTCGC' ,
+				52 =>  'TCGTTAGC' ,
+				53 =>  'TACCGAGC' ,
+				54 =>  'TGTTCTCC' ,
+				55 =>  'TTCGCACC' ,
+				56 =>  'TTGCGTAC' ,
+				57 =>  'TCTACGAC' ,
+				58 =>  'TGACAGAC' ,
+				59 =>  'TAGAACAC' ,
+				60 =>  'TCATCCTA' ,
+				61 =>  'TGCTGATA' ,
+				62 =>  'TAGACGGA' ,
+				63 =>  'TGTGAAGA' ,
+				64 =>  'TCTCTTCA' ,
+				65 =>  'TTGTTCCA' ,
+				66 =>  'TGAAGCCA' ,
+				67 =>  'TACCACCA' ,
+				68 =>  'TGCGTGAA' ,
+				69 =>  'GGTGAGTT' ,
+				70 =>  'GATCTCTT' ,
+				71 =>  'GTGTCCTT' ,
+				72 =>  'GACGGATT' ,
+				73 =>  'GCAACATT' ,
+				74 =>  'GGTCGTGT' ,
+				75 =>  'GAATCTGT' ,
+				76 =>  'GTACATCT' ,
+				77 =>  'GAGGTGCT' ,
+				78 =>  'GCATGGCT' ,
+				79 =>  'GTTAGCCT' ,
+				80 =>  'GTCGCTAT' ,
+				81 =>  'GGAATGAT' ,
+				82 =>  'GAGCCAAT' ,
+				83 =>  'GCTCCTTG' ,
+				84 =>  'GTAAGGTG' ,
+				85 =>  'GAGGATGG' ,
+				86 =>  'GTTGTCGG' ,
+				87 =>  'GGATTAGG' ,
+				88 =>  'GATAGAGG' ,
+				89 =>  'GTGTGTCG' ,
+				90 =>  'GCAATCCG' ,
+				91 =>  'GACCTTAG' ,
+				92 =>  'GCCTGTTC' ,
+				93 =>  'GCACTGTC' ,
+				94 =>  'GCTAACTC' ,
+				95 =>  'GATTCATC' ,
+				96 =>  'GTCTTGGC' ,
+				97 =>  'GTAGAAGC' ,
+				98 =>  'GATGGTCC' ,
+				99 =>  'GTGCTACC' ,
+				100 =>  'GCGATTAC' ,
+				101 =>  'GGTTGGAC' ,
+				102 =>  'GGCACAAC' ,
+				103 =>  'GACACTTA' ,
+				104 =>  'GTGCAGTA' ,
+				105 =>  'GGAGTCTA' ,
+				106 =>  'GCTATGGA' ,
+				107 =>  'GAGTGCGA' ,
+				108 =>  'GTAACCGA' ,
+				109 =>  'GGCAAGCA' ,
+				110 =>  'GCCTTACA' ,
+				111 =>  'GAACGACA' ,
+				112 =>  'GCAGGTAA' ,
+				113 =>  'GCGTCGAA' ,
+				114 =>  'CGTTCGGT' ,
+				115 =>  'CACCAGGT' ,
+				116 =>  'CTGCGAGT' ,
+				117 =>  'CCGTATCT' ,
+				118 =>  'CGCTTCCT' ,
+				119 =>  'CAAGACCT' ,
+				120 =>  'CACACACT' ,
+				121 =>  'CCTAGTAT' ,
+				122 =>  'CCACCGAT' ,
+				123 =>  'CTTCACAT' ,
+				124 =>  'CTATCATG' ,
+				125 =>  'CATGAATG' ,
+				126 =>  'CCACTTGG' ,
+				127 =>  'CTGTACGG' ,
+				128 =>  'CTAGATAG' ,
+				129 =>  'CACTCGAG' ,
+				130 =>  'CCGACAAG' ,
+				131 =>  'CTTGCTTC' ,
+				132 =>  'CATAGGTC' ,
+				133 =>  'CACATTGC' ,
+				134 =>  'CGCTAAGC' ,
+				135 =>  'CAACCTCC' ,
+				136 =>  'CAGCTGAC' ,
+				137 =>  'CTCAAGAC' ,
+				138 =>  'CGTGTCAC' ,
+				139 =>  'CCATGCAC' ,
+				140 =>  'CGTTACTA' ,
+				141 =>  'CAAGTAGA' ,
+				142 =>  'CTCTCTCA' ,
+				143 =>  'CGACTGCA' ,
+				144 =>  'CCTGAGCA' ,
+				145 =>  'CAGGCTAA' ,
+				146 =>  'CGGAGGAA' ,
+				147 =>  'AGGAGATT' ,
+				148 =>  'AGGCAGCT' ,
+				149 =>  'ACGTTCAT' ,
+				150 =>  'AACGTGTG' ,
+				151 =>  'AGACCGTG' ,
+				152 =>  'ACCTCTGG' ,
+				153 =>  'ATCCTAGG' ,
+				154 =>  'ATCAACCG' ,
+				155 =>  'AGGTCACG' ,
+				156 =>  'ACTGTTAG' ,
+				157 =>  'AAGAGTAG' ,
+				158 =>  'ATTCGGAG' ,
+				159 =>  'ACGCAATC' ,
+				160 =>  'ACAAGTGC' ,
+				161 =>  'ATGGATCC' ,
+				162 =>  'AGAGGACC' ,
+				163 =>  'ATCTCCAC' ,
+				164 =>  'ATTGGCTA' ,
+				165 =>  'AATCCTGA' ,
+				166 =>  'AGGATTCA' ,
+				167 =>  'AACTGGCA' ,
+				168 =>  'ACAACGCA' ,
+				169 =>  'CGGAAACA' ,
+				170 =>  'AATGAATT' ,
+				171 =>  'TAGGACCC' ,
+				172 =>  'TCTCAGTG' ,
+				173 =>  'CATGGGAA' ,
+				174 =>  'CCTAAGAT' ,
+				175 =>  'CTCAGATA' ,
+				176 =>  'CCCATAGG' ,
+				177 =>  'GCTATGAC' ,
+				178 =>  'GCTGTGAA' ,
+				179 =>  'ACCTTCAA' ,
+				180 =>  'ACAAAGCC' ,
+				181 =>  'CAAAACCG' ,
+				182 =>  'GCTGGACA' ,
+				183 =>  'AAGTCGTA' ,
+				184 =>  'CATCCGTA' ,
+				185 =>  'TTGTGTCT' ,
+				186 =>  'TGCTCTAG' ,
+				187 =>  'ACCCAACA' ,
+				188 =>  'CGATCTGA' ,
+				189 =>  'GTTCCACG' ,
+				190 =>  'ACTCTTTC' ,
+				191 =>  'TATTGGAG' ,
+				192 =>  'TAAACATA' ,
+				193 =>  'GTAAGATA' ,
+				194 =>  'TACCGCAA' ,
+				195 =>  'TATCTCCT' ,
+				196 =>  'TGTCATCT' ,
+				197 =>  'ATAGCTCT' ,
+				198 =>  'AGTCCAAC' ,
+				199 =>  'TTTGGGCA' ,
+				200 =>  'TCTGACGC' ,
+				201 =>  'TGTCGACT' ,
+				202 =>  'GTCACGTA' ,
+				203 =>  'TTGAGCGA' ,
+				204 =>  'GAGACATA' ,
+				205 =>  'GTCAAGCT' ,
+				206 =>  'AGCAAGTT' ,
+				207 =>  'GACGCTCA' ,
+				208 =>  'ACGGCAGC' ,
+				209 =>  'AGAACTGA' ,
+				210 =>  'CGCCTTTG' ,
+				211 =>  'TAAGGTCA' ,
+				212 =>  'ACGTTGGC' ,
+				213 =>  'CCAGCTTA' ,
+				214 =>  'GAATCCTA' ,
+				215 =>  'ACTTCGTA' ,
+				216 =>  'TAGTCGGT' ,
+				217 =>  'CGCACGAG' ,
+				218 =>  'ACGTACTA' ,
+				219 =>  'AGCGCCAA' ,
+				220 =>  'GCCTGCCC' ,
+				221 =>  'AGGACGAT' ,
+				222 =>  'CTTGACCG' ,
+				223 =>  'AGGTCTAA' ,
+				224 =>  'CGAGATCC' ,
+				225 =>  'ATTAGCGG' ,
+				226 =>  'GCGCTGAT' ,
+				227 =>  'TGCTGAAC' ,
+				228 =>  'GAGGGCAG' ,
+				229 =>  'GTTTTCAC' ,
+				230 =>  'GAGATGCC' ,
+				231 =>  'TTGAGAAG' ,
+				232 =>  'GCATCCGG' ,
+				233 =>  'GTCACCAG' ,
+				234 =>  'GAGGTCGC' ,
+				235 =>  'AAGGGGTA' ,
+				236 =>  'TTTTACGT' ,
+				237 =>  'TTCCTACA' ,
+				238 =>  'AGTGTAGT' ,
+				239 =>  'GTGGCCAA' ,
+				240 =>  'AAATACTC' ,
+				241 =>  'CACCCGTC' ,
+				242 =>  'TCGTGGTT' ,
+				243 =>  'ACTTGGGG' ,
+				244 =>  'GGCTGCTT' ,
+				245 =>  'CAGGGTCG' ,
+				246 =>  'CTCGTCGA' ,
+				247 =>  'TCTACAGT' ,
+				248 =>  'CTTCTAGA' ,
+				249 =>  'AACGGCTT' ,
+				250 =>  'ATAAGACT' ,
+				251 =>  'GTTTTTCG' ,
+				252 =>  'ATTGGTAT' ,
+				253 =>  'CGCCAGTA' ,
+				254 =>  'AAGCCGAA' ,
+				255 =>  'TGACCCAC' ,
+				256 =>  'ATTGCACA' ,
+				257 =>  'CTTTTGAT' ,
+				258 =>  'TAGCGAGA' ,
+				259 =>  'TTCGCAGG' ,
+				260 =>  'TAGTTATT' ,
+				261 =>  'TCCTCCGA' ,
+				262 =>  'GCGGGTCT' ,
+				263 =>  'GATTCTAT' ,
+				264 =>  'ATGCAAAG' ,
+				265 =>  'GTCTGAGG' ,
+				266 =>  'TCTGGCGA' ,
+				267 =>  'AATTTGCG' ,
+				268 =>  'TGGGTTGG' ,
+				269 =>  'AGTTGAAA' ,
+				270 =>  'GACCGGAA' ,
+				271 =>  'GATCGAAC' ,
+				272 =>  'GTATAGGG' ,
+				273 =>  'GGTAAGAG' ,
+				274 =>  'AGTCCGAT' ,
+				275 =>  'ATACAGGC' ,
+				276 =>  'TGAGACTC' ,
+				277 =>  'ACTCAGGA' ,
+				278 =>  'GTGTCTGA' ,
+				279 =>  'CTTGAATC' ,
+				280 =>  'CCGCATGA' ,
+				281 =>  'AAGTAACA' ,
+				282 =>  'GTGGTACT' ,
+				283 =>  'AGCTGTGC' ,
+				284 =>  'TTACCTTC' ,
+				285 =>  'TCCGGGTA' ,
+				286 =>  'CTACGTAA' ,
+				287 =>  'TCGGACCG' ,
+				288 =>  'ATGCGTCG' ,
+				289 =>  'TTCTTAGC' ,
+				290 =>  'TGAGTAAG' ,
+				291 =>  'AAGTGATA' ,
+				292 =>  'TCGATGCG' ,
+				293 =>  'TATTCTGG' ,
+				294 =>  'AGCCGTGA' ,
+				295 =>  'AAGCCTTC' ,
+				296 =>  'AGGTATCC' ,
+				297 =>  'AGGATCTC' ,
+				298 =>  'CTGTTTGA' ,
+				299 =>  'GGAATTTC' ,
+				300 =>  'TTGGAGCA' ,
+				301 =>  'AAGGTCTG' ,
+				302 =>  'AATTAGGC' ,
+				303 =>  'AATCGGGT' ,
+				304 =>  'AGGTAGAC' ,
+				305 =>  'CTTATTCC' ,
+				306 =>  'CAGGCTCT' ,
+				307 =>  'AAAGCACG' ,
+				308 =>  'GTATACAC' ,
+				309 =>  'GGACATAT' ,
+				310 =>  'CGGTTGGG' ,
+				311 =>  'GTCCGTGA' ,
+				312 =>  'GCCGAACC' ,
+				313 =>  'ACTTTACT' ,
+				314 =>  'GGGTCCAT' ,
+				315 =>  'ATAACTAG' ,
+				316 =>  'AATAGAGA' ,
+				317 =>  'TCACCATT' ,
+				318 =>  'CGCCTGAT' ,
+				319 =>  'GCGTGAAC' ,
+				320 =>  'TAAGGGTG' ,
+				321 =>  'GGTGTCGA' ,
+				322 =>  'CCGTTAGG' ,
+				323 =>  'TGGCAAAA' ,
+				324 =>  'CCTACCCG' ,
+				325 =>  'AACAGCGC' ,
+				326 =>  'TATACATC' ,
+				327 =>  'AAGCGACT' ,
+				328 =>  'GAAGCGCA' ,
+				329 =>  'ACCTCTAC' ,
+				330 =>  'GATTGCGT' ,
+				331 =>  'GCTGGTTG' ,
+				332 =>  'ATCGTCCT' ,
+				333 =>  'GGACACGG' ,
+				334 =>  'CGCACCTA' ,
+				335 =>  'CTTCGGCT' ,
+				336 =>  'CGAATCGA' ,
+				337 =>  'TAACAACT' ,
+				338 =>  'AGCTCTTT' ,
+				339 =>  'TAATCCCT' ,
+				340 =>  'AGGACACT' ,
+				341 =>  'TTACACTA' ,
+				342 =>  'AAACATCA' ,
+				343 =>  'CCATAGCT' ,
+				344 =>  'GTTATGGC' ,
+				345 =>  'ATCCCCTA' ,
+				346 =>  'CATACTAC' ,
+				347 =>  'CAATTGTT' ,
+				348 =>  'AAACCCGT' ,
+				349 =>  'CAGATTTC' ,
+				350 =>  'GCGTAGGT' ,
+				351 =>  'GGCATTCG' ,
+				352 =>  'TGGGGCTT' ,
+				353 =>  'CTGACTAC' ,
+				354 =>  'AACTTTTA' ,
+				355 =>  'AGGGATTC' ,
+				356 =>  'CCGAGTAG' ,
+				357 =>  'GGGGACTA' ,
+				358 =>  'GGAGTTGA' ,
+				359 =>  'AGCTCATC' ,
+				360 =>  'TAATCAAC' ,
+				361 =>  'ACTGGTCG' ,
+				362 =>  'GACGATTG' ,
+				363 =>  'AGCGATGA' ,
+				364 =>  'GAAGAGAT' ,
+				365 =>  'CGTATGCA' ,
+				366 =>  'CACGTGCG' ,
+				367 =>  'GCTTAAAC' ,
+				368 =>  'GTTCCGCA' ,
+				369 =>  'GTATCGTC' ,
+				370 =>  'GTCCTCAC' ,
+				371 =>  'GTACGGAC' ,
+				372 =>  'CATTTTGC' ,
+				373 =>  'TCCTCTCT' ,
+				374 =>  'AGCAACGA' ,
+				375 =>  'ACAGAAGA' ,
+				376 =>  'CGACCCTT' ,
+				377 =>  'CTGCCTAG' ,
+				378 =>  'GAGCGCAT' ,
+				379 =>  'AACTTATC' ,
+				380 =>  'CCGATGTA' ,
+				381 =>  'TTACTACC' ,
+				382 =>  'CAAGGAGC' ,
+				383 =>  'TGGTTGAC' ,
+				384 =>  'ACCTGCTG' ,
+				385 =>  'CGGCAAAC' ,
+				386 =>  'CCTGATGG' ,
+				387 =>  'GAGACGTG' ,
+				388 =>  'ATGTACGA' ,
+				389 =>  'ACCCCCAG' ,
+				390 =>  'CACCCAAA' ,
+				391 =>  'TGCAGAGG' ,
+				392 =>  'CAACTTAT' ,
+				393 =>  'GTCATAAG' ,
+				394 =>  'TCCAAAAG' ,
+				395 =>  'GTTCTTTC' ,
+				396 =>  'CAGACCAA' ,
+				397 =>  'CGATGACG' ,
+				398 =>  'AAGAGTGC' ,
+				399 =>  'TGTCGCAC' ,
+				400 =>  'AAAGTGAT' ,
+				401 =>  'GTAGTCGT' ,
+				402 =>  'GCGCGATA' ,
+				403 =>  'CTAGGCTC' ,
+				404 =>  'GACTACAA' ,
+				405 =>  'CGTCAAGG' ,
+				406 =>  'GTACAAGA' ,
+				407 =>  'GACCCAGA' ,
+				408 =>  'GGACTTGT' ,
+				409 =>  'TAATCGTG' ,
+				410 =>  'ATTACCTT' ,
+				411 =>  'ACCGATGT' ,
+				412 =>  'GATGTAGG' ,
+				413 =>  'CTAAGCTT' ,
+				414 =>  'ATCCGCAA' ,
+				415 =>  'TGCATGCC' ,
+				416 =>  'TACCTAAG' ,
+				417 =>  'AGACTCAG' ,
+				418 =>  'GCGAGGTT' ,
+				419 =>  'ACTGGGAC' ,
+				420 =>  'CACTGAAC' ,
+				421 =>  'AGAAACCA' ,
+				422 =>  'GGCCCAAA' ,
+				423 =>  'AGCTTCCA' ,
+				424 =>  'CTGGCCTG' ,
+				425 =>  'TATTCCGC' ,
+				426 =>  'ATAGAAAC' ,
+				427 =>  'CATTGTCT' ,
+				428 =>  'GATTACCA' ,
+				429 =>  'TTGCCGAC' ,
+				430 =>  'TAGTAGAG' ,
+				431 =>  'ATGATGTC' ,
+				432 =>  'TTCACCTG' ,
+				433 =>  'CCGTTTTC' ,
+				434 =>  'ACCGCGTC' ,
+				435 =>  'TAGATAGG' ,
+				436 =>  'TGATTTCT' ,
+				437 =>  'CGAGGCAG' ,
+				438 =>  'ATTTTGCA' ,
+				439 =>  'ACAGGGCA' ,
+				440 =>  'ATTACTGT' ,
+				441 =>  'TACCCTTT' ,
+				442 =>  'CCGAAGAA' ,
+				443 =>  'CGCGTCTC' ,
+				444 =>  'ATGGATTA' ,
+				445 =>  'CGAAAAAC' ,
+				446 =>  'TCGGGAAT' ,
+				447 =>  'CAGGTCGT' ,
+				448 =>  'TTTCCTCT' ,
+				449 =>  'TAAAGGCG' ,
+				450 =>  'CTGTGGGA' ,
+				451 =>  'ACACGTCG' ,
+				452 =>  'TAAATCGT' ,
+				453 =>  'TGATGGAT' ,
+				454 =>  'GGCGGAAG' ,
+				455 =>  'CCTGCGTT' ,
+				456 =>  'GCATATCA' ,
+				457 =>  'AGACTATC' ,
+				458 =>  'TACTTTTC' ,
+				459 =>  'CAGTATCG' ,
+				460 =>  'GGACTAAC' ,
+				461 =>  'TGGAAACG' ,
+				462 =>  'TTAGTCAA' ,
+				463 =>  'GGCACTTC' ,
+				464 =>  'CGCGTACA' ,
+				465 =>  'GATATCTC' ,
+				466 =>  'CGAGCACT' ,
+				467 =>  'GACATGAT' ,
+				468 =>  'TCAAGTCC' ,
+				469 =>  'GGTCCTAG' ,
+				470 =>  'GTTCAAAG' ,
+				471 =>  'GCTATTGT' ,
+				472 =>  'CCGAAAGT' ,
+				473 =>  'TTGATCCT' ,
+				474 =>  'GAGCATAG' ,
+				475 =>  'GGGCTACG' ,
+				476 =>  'CGGGAAAT' ,
+				477 =>  'AATCGATG' ,
+				478 =>  'CAGCACGG' ,
+				479 =>  'TATACTCA' ,
+				480 =>  'CTGCTCCG' ,
+				481 =>  'GAGGCCTC' ,
+				482 =>  'CGGGCTTA' ,
+				483 =>  'ACCGTCGG' ,
+				484 =>  'TGTTACTG' ,
+				485 =>  'CAGTCAAC' ,
+				486 =>  'ACGCTTGA' ,
+				487 =>  'AAGGATAC' ,
+				488 =>  'TTCATGGA' ,
+				489 =>  'GTCCTATT' ,
+				490 =>  'CATCACCT' ,
+				491 =>  'GTTGATGA' ,
+				492 =>  'CCCAGATC' ,
+				493 =>  'CCTGCAAG' ,
+				494 =>  'TCCGAAGC' ,
+				495 =>  'ATAGCTGA' ,
+				496 =>  'TAGGGGAC' ,
+				497 =>  'CAATGCAG' ,
+				498 =>  'TGCCCGTA' ,
+				499 =>  'AGACAGCA' ,
+				500 =>  'CATCGCGC' ,
+				501 =>  'TTCTGGTG' ,
+				502 =>  'TGAGCGGA' ,
+				503 =>  'CGCAGTAC' ,
+				504 =>  'GCATGGAC' ,
+				505 =>  'CACTGCTT' ,
+				506 =>  'ATAAGTCA' ,
+				507 =>  'TCAATATC' ,
+				508 =>  'AGTTGCCG' ,
+				509 =>  'AGGCACGC' ,
+				510 =>  'TGATGCGA' ,
+				511 =>  'ATACACCC' ,
+				512 =>  'CTTGCCAC' ,
+				513 =>  'CGTACACA' ,
+				514 =>  'CCAAAGGA' ,
+				515 =>  'ACAATATG' ,
+				516 =>  'TGGGTACT' ,
+				517 =>  'ACGGGCAA' ,
+				518 =>  'TAGCCCCT' ,
+				519 =>  'CGGAGCGT' ,
+				520 =>  'TCTCTGGT' ,
+				521 =>  'GCAAAAGC' ,
+				522 =>  'TTGCTTGG' ,
+				523 =>  'CTCCAATC' ,
+				524 =>  'ACCCTTCT' ,
+				525 =>  'CTCTCGGC' ,
+				526 =>  'CCGAGTTA' ,
+				527 =>  'CGCCATAA' ,
+				528 =>  'TGTCGAGG' ,
+				529 =>  'GCCCCTAC' ,
+				530 =>  'GATGCGTG' ,
+				531 =>  'GGATAAAG' ,
+				532 =>  'GTGGGCGT' ,
+				533 =>  'ACAGAGTG' ,
+				534 =>  'CATAGTTG' ,
+				535 =>  'ACCTGAGA' ,
+				536 =>  'CGTCGACA' ,
+				537 =>  'AGTACTCC' ,
+				538 =>  'ATCAAGCC' ,
+				539 =>  'ACTACTAT' ,
+				540 =>  'GTTCCGGT' ,
+				541 =>  'CTAACGAA' ,
+				542 =>  'CTATCCAT' ,
+				543 =>  'TACCCACC' ,
+				544 =>  'CTCATCTT' ,
+				545 =>  'GTCTAAGA' ,
+				546 =>  'CTCCCAGC' ,
+				547 =>  'TAAGCTAC' ,
+				548 =>  'GTTGGATT' ,
+				549 =>  'CCGCACTA' ,
+				550 =>  'GTCGGAAA' ,
+				551 =>  'TTCCATGT' ,
+				552 =>  'CTAACGGT' ,
+				553 =>  'GATGTGTA' ,
+				554 =>  'GTAACACC' ,
+				555 =>  'AACCCGCA' ,
+				556 =>  'GGAGAACA' ,
+				557 =>  'CTTATCTG' ,
+				558 =>  'TGAGTCCC' ,
+				559 =>  'TTGTATTC' ,
+				560 =>  'AGGGAGGG' ,
+				561 =>  'ATTCAGTT' ,
+				562 =>  'TGTCCCGA' ,
+				563 =>  'ACGATCAG' ,
+				564 =>  'ATCAGAGT' ,
+				565 =>  'TCTGAATA' ,
+				566 =>  'TCTTACAT' ,
+				567 =>  'GAGGGAGC' ,
+				568 =>  'ACCACCCT' ,
+				569 =>  'AAACGTGG' ,
+				570 =>  'TCTGATCG' ,
+				571 =>  'AATCCCAC' ,
+				572 =>  'TCTGTATG' ,
+				573 =>  'CTCGCTTT' ,
+				574 =>  'ACTGCCTG' ,
+				575 =>  'AGTTCGCA' ,
+				576 =>  'GAAAGGTT' ,
+				577 =>  'TGAGCAGC' ,
+				578 =>  'TCGCCCTA' ,
+				579 =>  'TCGCACAT' ,
+				580 =>  'ACCAGAAA' ,
+				581 =>  'TCGGCATT' ,
+				582 =>  'TCCGTGTG' ,
+				583 =>  'TGCAACGC' ,
+				584 =>  'AACCCATT' ,
+				585 =>  'GCGACACA' ,
+				586 =>  'AGAGTTTT' ,
+				587 =>  'ACTTGCCT' ,
+				588 =>  'GTATAGAA' ,
+				589 =>  'GCGAGCAT' ,
+				590 =>  'GGAGGATT' ,
+				591 =>  'TTTCCAAC' ,
+				592 =>  'ATAATGGG' ,
+				593 =>  'AAGTCAAT' ,
+				594 =>  'GGCGATTC' ,
+				595 =>  'ATGTTGAG' ,
+				596 =>  'CTCCTTTA' ,
+				597 =>  'ACCCTTGG' ,
+				598 =>  'ATCTGGAA' ,
+				599 =>  'GCGCACCC' ,
+				600 =>  'CAGTCATG' ,
+				601 =>  'GCTTGTTT' ,
+				602 =>  'AGCATGTG' ,
+				603 =>  'CGATAGCC' ,
+				604 =>  'AGATCCTC' ,
+				605 =>  'AGCATGGA' ,
+				606 =>  'GTGGAGAC' ,
+				607 =>  'TGGAAGGC' ,
+				608 =>  'GTGGGGTT' ,
+				609 =>  'TATACGAA' ,
+				610 =>  'GTCAATAG' ,
+				611 =>  'TCCATCAC' ,
+				612 =>  'AACAAGGG' ,
+				613 =>  'ATCGCATG' ,
+				614 =>  'GCCTTGCG' ,
+				615 =>  'GTGACTTC' ,
+				616 =>  'GAAGACAG' ,
+				617 =>  'ATCATGAT' ,
+				618 =>  'TACAATCC' ,
+				619 =>  'CAAAGTGT' ,
+				620 =>  'ATTCGAAT' ,
+				621 =>  'CGAAACGT' ,
+				622 =>  'GTGGTTAG' ,
+				623 =>  'CCCACCAT' ,
+				624 =>  'TTTCGGCC' ,
+				625 =>  'AAAACAGT' ,
+				626 =>  'GAATCACC' ,
+				627 =>  'TATGGTAC' ,
+				628 =>  'TATGGCCA' ,
+				629 =>  'AGGAGCTG' ,
+				630 =>  'GGGGCAAA' ,
+				631 =>  'ATCCTGTC' ,
+				632 =>  'TCCTACTC' ,
+				633 =>  'CTACTGCT' ,
+				634 =>  'TTTGAGAC' ,
+				635 =>  'TTTGTGTT' ,
+				636 =>  'ATACGCGA' ,
+				637 =>  'TCTTTTGG' ,
+				638 =>  'CTTTGTCA' ,
+				639 =>  'ACGGTACA' ,
+				640 =>  'AAGAAACC' ,
+				641 =>  'TGCATTAG' ,
+				642 =>  'ATCTCTGT' ,
+				643 =>  'GGTCGATA' ,
+				644 =>  'GGATACTG' ,
+				645 =>  'CCAACAGA' ,
+				646 =>  'CTTCCCAA' ,
+				647 =>  'ACCATGCT' ,
+				648 =>  'GTGATTTA' ,
+				649 =>  'CGGTGCAA' ,
+				650 =>  'AATTCCTG' ,
+				651 =>  'CTTCAGCG' ,
+				652 =>  'AGTTGTGT' ,
+				653 =>  'ATGTGCTC' ,
+				654 =>  'AGGTTCGC' ,
+				655 =>  'ATGTAGCG' ,
+				656 =>  'AATGCCTC' ,
+				657 =>  'TGACTGTA' ,
+				658 =>  'ACTTAAGC' ,
+				659 =>  'CAACATTG' ,
+				660 =>  'GCTGTTTA' ,
+				661 =>  'TTCGTTCG' ,
+				662 =>  'AAGTATGT' ,
+				663 =>  'CCACTAAA' ,
+				664 =>  'GGGAGAGC' ,
+				665 =>  'CTTAACGC' ,
+				666 =>  'AGTGTTCT' ,
+				667 =>  'ACTTCCGA' ,
+				668 =>  'GCTGCTAC' ,
+				669 =>  'ATCGGGTG' ,
+				670 =>  'ACGACTTG' ,
+				671 =>  'ATATTCGG' ,
+				672 =>  'GCCTAATT' ,
+				673 =>  'CACAGAAT' ,
+				674 =>  'ACTCCCCA' ,
+				675 =>  'TGTGCGCC' ,
+				676 =>  'CACCAACA' ,
+				677 =>  'CTGTAGTT' ,
+				678 =>  'TCCTTCAG' ,
+				679 =>  'AATCTACG' ,
+				680 =>  'CACAGTAG' ,
+				681 =>  'TTAGCAGT' ,
+				682 =>  'AGAGGGAG' ,
+				683 =>  'ATGTCCAT' ,
+				684 =>  'ACCATAGT' ,
+				685 =>  'TCCCACTG' ,
+				686 =>  'CGTACTGC' ,
+				687 =>  'AAGAACGT' ,
+				688 =>  'TACATACA' ,
+				689 =>  'ATCGACCA' ,
+				690 =>  'ACACTTAC' ,
+				691 =>  'GCAGTGGC' ,
+				692 =>  'AGCAAACC' ,
+				693 =>  'AGGCGACA' ,
+				694 =>  'CCGGACGA' ,
+				695 =>  'GTCCATGG' ,
+				696 =>  'CACTATGC' ,
+				697 =>  'CTACCATA' ,
+				698 =>  'CGGCTCAC' ,
+				699 =>  'TAGAGATG' ,
+				700 =>  'CTAGAGTG' ,
+				701 =>  'TTAAGGTA' ,
+				702 =>  'TAGCTGTA' ,
+				703 =>  'CATGAAGA' ,
+				704 =>  'CAACCAGT' ,
+				705 =>  'GAACCGAG' ,
+				706 =>  'TGCGCAAC' ,
+				707 =>  'CGGGAGTA' ,
+				708 =>  'AGTGAATA' ,
+				709 =>  'GTAAGTAC' ,
+				710 =>  'CACTCCCG' ,
+				711 =>  'AGGGTCAT' ,
+				712 =>  'ATTAGCAA' ,
+				713 =>  'ATAGACTT' ,
+				714 =>  'CCGCCATT' ,
+				715 =>  'CCATCTCC' ,
+				716 =>  'TCAAGAGT' ,
+				717 =>  'TCGTAACA' ,
+				718 =>  'GTATTACA' ,
+				719 =>  'GTGAACCA' ,
+				720 =>  'GCACTCCA' ,
+				721 =>  'CCACGTTT' ,
+				722 =>  'CCAATCAC' ,
+				723 =>  'TGGTATCA' ,
+				724 =>  'CAGATACC' ,
+				725 =>  'CATAGCGA' ,
+				726 =>  'AGATCAAG' ,
+				727 =>  'GGGGTTGC' ,
+				728 =>  'AAAGGTAT' ,
+				729 =>  'CTCTTCCC' ,
+				730 =>  'GACGTACC' ,
+				731 =>  'TGGTTCTC' ,
+				732 =>  'GGATCTAA' ,
+				733 =>  'GGCCTCGC' ,
+				734 =>  'GGTCCTTC' ,
+				735 =>  'GGGTGTGA' ,
+				736 =>  'TATGGACG' ,
+				737 =>  'GACTAGCC' ,
+				738 =>  'AATGCGGT' ,
+				739 =>  'CAACTCTG' ,
+				740 =>  'TGCGAATG' ,
+				741 =>  'TGTGGTGC' ,
+				742 =>  'GTGCACGC' ,
+				743 =>  'AATCATCT' ,
+				744 =>  'GGACGTTG' ,
+				745 =>  'CTCATCAA' ,
+				746 =>  'GTGTTCGA' ,
+				747 =>  'TTTACTTG' ,
+				748 =>  'ATCTGACC' ,
+				749 =>  'GACGAGTT' ,
+				750 =>  'TCATCGGT' ,
+				751 =>  'AGAATCAA' ,
+				752 =>  'TCTATCAA' ,
+				753 =>  'ATTCTTAC' ,
+				754 =>  'CTTTAAGT' ,
+				755 =>  'TGTGTTTA' ,
+				756 =>  'GGTTTAGC' ,
+				757 =>  'TGACGAAA' ,
+				758 =>  'AGAGAGTC' ,
+				759 =>  'TATATGAG' ,
+				760 =>  'GGATCCGC' ,
+				761 =>  'GGAGGCGG' ,
+				762 =>  'GATCGCTG' ,
+				763 =>  'CTGTTAAC' ,
+				764 =>  'CCTTCTAA' ,
+				765 =>  'CAAAATGC' ,
+				766 =>  'GGTTAGGG' ,
+				767 =>  'ACTTTAAC' ,
+				768 =>  'AGTGACCG' ,
+				769 =>  'GGTCTGCC' ,
+				770 =>  'TCAGACGA' ,
+				771 =>  'AGACGTTT' ,
+				772 =>  'TCTTATAC' ,
+				773 =>  'GAGTTTCC' ,
+				774 =>  'GCATGGTA' ,
+				775 =>  'CGGCGGTT' ,
+				776 =>  'CTGAGGCG' ,
+				777 =>  'GTACCAGG' ,
+				778 =>  'ATGGAATG' ,
+				779 =>  'GTTGGAGC' ,
+				780 =>  'TTATGAGA' ,
+				781 =>  'AAAGTGCA' ,
+				782 =>  'ATTGAGGA' ,
+				783 =>  'AAATGTCA' ,
+				784 =>  'ACATATAG' ,
+				785 =>  'GTGATGCA' ,
+				786 =>  'ATAAGGAG' ,
+				787 =>  'GCACAAAT' ,
+				788 =>  'GGTTCGTT' ,
+				789 =>  'CCAGGTCC' ,
+				790 =>  'TGAGATAG' ,
+				791 =>  'GATGGTAA' ,
+				792 =>  'GGTCGGCA' ,
+				793 =>  'CATCGGGA' ,
+				794 =>  'AGGCATAG' ,
+				795 =>  'CCCATTCC' ,
+				796 =>  'TGGTCCCT' ,
+				797 =>  'TTATGTGC' ,
+				798 =>  'TGGTCGTA' ,
+				799 =>  'GTGAATGC' ,
+				800 =>  'TGGCCTGA' ,
+				801 =>  'TCAAAACG' ,
+				802 =>  'TTCGGGGT' ,
+				803 =>  'GGTGGGGA' ,
+				804 =>  'CACCCCAT' ,
+				805 =>  'GACATTGT' ,
+				806 =>  'GGAACCCG' ,
+				807 =>  'GCTGCCTT' ,
+				808 =>  'CCTGTAGC' ,
+				809 =>  'AGAATTCC' ,
+				810 =>  'GGAGCGGT' ,
+				811 =>  'GTTAGCTC' ,
+				812 =>  'GCTCTAGT' ,
+				813 =>  'ACACACGT' ,
+				814 =>  'GAATGTCG' ,
+				815 =>  'GGTTAACT' ,
+				816 =>  'CCTTGAGT' ,
+				817 =>  'CTGTCGAT' ,
+				818 =>  'AGCCCTCG' ,
+				819 =>  'TTACGTCG' ,
+				820 =>  'CGAATTAG' ,
+				821 =>  'GCTACCAA' ,
+				822 =>  'CGTAACAG' ,
+				823 =>  'AAAGCCGA' ,
+				824 =>  'TCCCCGTG' ,
+				825 =>  'GCGTATAA' ,
+				826 =>  'CCTAGAGC' ,
+				827 =>  'AAGCCAGG' ,
+				828 =>  'ATCCTGAG' ,
+				829 =>  'CCCTTTGT' ,
+				830 =>  'AACGCGAG' ,
+				831 =>  'CAGCTTCT' ,
+				832 =>  'CGTGCTGT' ,
+				833 =>  'GCATATTG' ,
+				834 =>  'ATCGGAGC' ,
+				835 =>  'TCTACTCC' ,
+				836 =>  'AGTTGACT' ,
+				837 =>  'ACACTAGA' ,
+				838 =>  'GGTCAGGC' ,
+				839 =>  'CTATACCA' ,
+				840 =>  'ACACAGAC' ,
+				841 =>  'TCTGGCCT' ,
+				842 =>  'CACGCGAT' ,
+				843 =>  'GGTTACCC' ,
+				844 =>  'TAATGCCC' ,
+				845 =>  'TACGACGT' ,
+				846 =>  'CCCCAGCT' ,
+				847 =>  'TTAGCCTC' ,
+				848 =>  'TACCATAC' ,
+				849 =>  'AGCTCGCC' ,
+				850 =>  'AGTAATGG' ,
+				851 =>  'CCTCCGCG' ,
+				852 =>  'TTGCCCAT' ,
+				853 =>  'ATGGCTTT' ,
+				854 =>  'TAGGACAT' ,
+				855 =>  'TTCCGCCT' ,
+				856 =>  'AAGAGCCA' ,
+				857 =>  'GATACGAT' ,
+				858 =>  'GTCTGCTA' ,
+				859 =>  'CGGGGATC' ,
+				860 =>  'TCACCGCC' ,
+				861 =>  'ACTGCTCA' ,
+				862 =>  'AGTCTGTT' ,
+				863 =>  'ACGATCGA' ,
+				864 =>  'CCAGTCCT' ,
+				865 =>  'TTCTGCCG' ,
+				866 =>  'ACTCGCTC' ,
+				867 =>  'TATAGGTT' ,
+				868 =>  'GGGCATTT' ,
+				869 =>  'TTCTGGGA' ,
+				870 =>  'TTTCTCCG' ,
+				871 =>  'GGGGTGAA' ,
+				872 =>  'GCCATCCT' ,
+				873 =>  'TCAGCTGG' ,
+				874 =>  'CAGGTGTG' ,
+				875 =>  'CCAGCCCA' ,
+				876 =>  'GACTCGAC' ,
+				877 =>  'TTTTGGTC' ,
+				878 =>  'AACTACGG' ,
+				879 =>  'CTGACAAT' ,
+				880 =>  'GACCGTCT' ,
+				881 =>  'CCGCAGGC' ,
+				882 =>  'TGAATCTG' ,
+				883 =>  'GACTCATT' ,
+				884 =>  'TCGACTGA' ,
+				885 =>  'GCTCAGAT' ,
+				886 =>  'GAACAACC' ,
+				887 =>  'TTAGACCC' ,
+				888 =>  'TCGCTTTG' ,
+				889 =>  'GTAGTGAA' ,
+				890 =>  'CCTGGGTG' ,
+				891 =>  'CAAACTTG' ,
+				892 =>  'TCTGTCTC' ,
+				893 =>  'CATGGAGT' ,
+				894 =>  'TCGTGTAC' ,
+				895 =>  'CTTTCAGG' ,
+				896 =>  'ACCTAGAT' ,
+				897 =>  'GTCGGTAC' ,
+				898 =>  'AAGCTCGG' ,
+				899 =>  'CCATGTGA' ,
+				900 =>  'TGCGCATA' ,
+				901 =>  'CACCGTCA' ,
+				902 =>  'TAACAGTC' ,
+				903 =>  'TAACTCAT' ,
+				904 =>  'GTTCGTGC' ,
+				905 =>  'ACCGACCG' ,
+				906 =>  'CGTAATTG' ,
+				907 =>  'GGGTGGTG' ,
+				908 =>  'CTCGTTGG' ,
+				909 =>  'GACCGAGG' ,
+				910 =>  'TCACTCCT' ,
+				911 =>  'TCAAGCAA' ,
+				912 =>  'CCTCATCA' ,
+				913 =>  'ACATCTAT' ,
+				914 =>  'GTCACCGT' ,
+				915 =>  'TAAGAAAC' ,
+				916 =>  'GAAAAGGA' ,
+				917 =>  'TGCAGTTT' ,
+				918 =>  'GAGTTGTT' ,
+				919 =>  'GCACCGTA' ,
+				920 =>  'TCTCAAAC' ,
+				921 =>  'CTCTATAA' ,
+				922 =>  'TGCCTGGG' ,
+				923 =>  'GTTCTGTG' ,
+				924 =>  'ATGCAAGC' ,
+				925 =>  'TGTCGGAT' ,
+				926 =>  'AACCTCCC' ,
+				927 =>  'GCTATACG' ,
+				928 =>  'AAGCTTAA' ,
+				929 =>  'CAATGGCC' ,
+				930 =>  'GTATCGAG' ,
+				931 =>  'ATACCACA' ,
+				932 =>  'CCGTTTCG' ,
+				933 =>  'ATGCAGAT' ,
+				934 =>  'GGAGAGAA' ,
+				935 =>  'CACGGTGA' ,
+				936 =>  'CTCAATCT' ,
+				937 =>  'CGATACCT' ,
+				938 =>  'ACTAGCAC' ,
+				939 =>  'GCAGTTTT' ,
+				940 =>  'GGTAGAAT' ,
+				941 =>  'TCTTAGGA' ,
+				942 =>  'AGTGCACC' ,
+				943 =>  'TGCCAATC' ,
+				944 =>  'TCACGAAG' ,
+				945 =>  'CAACAAAC' ,
+				946 =>  'CCCACTTG' ,
+				947 =>  'CCCACTAA' ,
+				948 =>  'TAGGGGCT' ,
+				949 =>  'AACATTCT' ,
+				950 =>  'GACGTATA' ,
+				951 =>  'TGGACTCG' ,
+				952 =>  'CTGTGACA' ,
+				953 =>  'GGCTCGCT' ,
+				954 =>  'CCATCGAC' ,
+				955 =>  'GCATTACC' ,
+				956 =>  'CCTGACGT' ,
+				957 =>  'TCAGTGCC' ,
+				958 =>  'CGTAAGCC' ,
+				959 =>  'TCCCAGAA' ,
+				960 =>  'TGGATAGC' ,
+				961 =>  'AACACGAC' ,
+				962 =>  'GCCAGGAG' ,
+				);
+
+}
