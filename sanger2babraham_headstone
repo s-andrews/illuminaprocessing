@@ -57,7 +57,7 @@ foreach my $cram (keys %samples) {
 
 # We'll limit how many files we'll process at once so as to not do bad things
 # to the clusters IO
-my $MAX_RUNS = 6;
+my $MAX_RUNS = 10;
 
 my @job_ids;
 
@@ -134,9 +134,12 @@ while (1) {
 						$fastq2 =~ s/\.bam$/_R2.fastq/;
 
 						warn "Converting $bam to $fastq1 and $fastq2\n";
-
-						my $command = "/bi/apps/java/jre1.7.0_45/bin/java -Xmx10g -XX:+UseG1GC -XX:ParallelGCThreads=2 -jar /bi/apps/picard/1.88/SamToFastq.jar VALIDATION_STRINGENCY=SILENT QUIET=true INPUT=$bam FASTQ=$fastq1 SECOND_END_FASTQ=$fastq2";
-						my $cluster_command = "ssub -o ${bam}_bam2fastq.log --mem=20G \"$command\"";
+						# This is the old Picard Version
+						# my $command = "/bi/apps/java/jre1.7.0_45/bin/java -Xmx10g -XX:+UseG1GC -XX:ParallelGCThreads=2 -jar /bi/apps/picard/1.88/SamToFastq.jar VALIDATION_STRINGENCY=SILENT QUIET=true INPUT=$bam FASTQ=$fastq1 SECOND_END_FASTQ=$fastq2";
+						# I am now trying out a Samtools approach 18 12 2019
+						my $command = "samtools fastq -1 $fastq1 -2 $fastq2 $bam";
+						
+						my $cluster_command = "ssub -o ${bam}_bam2fastq.log -J $bam_bam2fq --mem=20G \"$command\"";
 						# my $job_value = `qsub -o ${bam}_bam2fastq.log -S /bin/bash -l h_vmem=20G $command`;
 						my $job_value = `$cluster_command`;
 
