@@ -37,14 +37,14 @@ my $dbh = DBI->connect( "DBI:mysql:database=sierra;host=bilin2.babraham.ac.uk;po
 
 
 unless ($dbh) {
-    die "Can't connect to sierra database\n";
+    die "Can't connect to Sierra database\n";
 }
 
 # We need to find out if this is a NextSeq run.  If it is then
 # the second barcode will need to be reverse complemented to
 # make it work with the sequences we stored because the NextSeq
 # is braindead and primes the second barcode in a different way
-# to every other illumina platform.
+# to every other Illumina platform.
 
 my ($instrument_name) = $dbh->selectrow_array( "SELECT instrument.description FROM run,instrument WHERE run.run_folder_name=? AND run.instrument_id=instrument.id", undef, ($run_folder) );
 
@@ -53,12 +53,12 @@ if ( $instrument_name =~ /nextseq/i ) {
     $is_next_seq = 1;
 }
 
-#Get a quick estimate of the barcode distribution
+# Get a quick estimate of the barcode distribution
 foreach my $lane (@lanes) {
     process_lane( $run_folder, $lane, 0 );
 }
 
-#Demultiplex the data
+# Demultiplex the data
 foreach my $lane (@lanes) {
     process_lane( $run_folder, $lane, 1 );
 }
@@ -87,7 +87,7 @@ sub process_lane {
 
     # Get the read numbers for the reads and barcodes
     my %read_numbers = get_read_numbers_for_run_folder($run_folder, $do_split);
-
+  
     unless (@$barcodes) {
 	
 	return unless $do_split;
@@ -131,21 +131,21 @@ sub process_lane {
 
 	
     if($do_split){
-	if ($double_coded) {
-	    warn "This is a double barcoded library\n";
-	} else {
-	    warn "This is a single barcoded library\n";
-	}
+        if ($double_coded) {
+            warn "This is a double barcoded library\n";
+        } else {
+            warn "This is a single barcoded library\n";
+        }
     }
 	
     unless($do_split){     #Produce temporary files summarising the barcode frequencies
-	get_observed_barcodes( $run_folder, $lane, $double_coded, \%read_numbers, $barcodes, 1 );
-	return;
+        get_observed_barcodes( $run_folder, $lane, $double_coded, \%read_numbers, $barcodes, 1 );
+        return;
     }
 
     # Now we need to get the most abundant observed codes in the library
     my @usable_barcodes = get_observed_barcodes( $run_folder, $lane, $double_coded, \%read_numbers, $barcodes, 0 );
-
+   
     unless (@usable_barcodes) {
         warn "Failed to list usable barcodes for lane $lane - giving up\n";
         return;
@@ -601,7 +601,7 @@ sub get_observed_barcodes {
 			last if $actual_count == 1_000_000;    #Only use first million lines
 		}
     }
-
+   
     close($fh1);
     close($fh2) if ($fh2);
 
@@ -618,20 +618,43 @@ sub get_observed_barcodes {
     die "Couldn't find project folder" unless ($project_folder);
 
     my $barcode_data_file = "$project_folder/barcode_L00${lane}_data.txt";
-
+   
     open( BARCODES, '>', $barcode_data_file ) or die "Can't write to $barcode_data_file: $!";
     print BARCODES join( "\t", ( "Code", "Freq", "Name" ) ), "\n";
 
+    my %errors = ();   # storing barcodes that are failing
+    my %warnings = (); # storing barcodes that had a lower than expected overall frequency
+    my $total_barcodes_expected = scalar keys %barcode_names;
+    # warn "Total barcodes expected: $total_barcodes_expected\n"; sleep(1);
+    
+    # The expected number of reads is Total reads/ number of samples
+    my $expected_number_of_reads = int($actual_count / $total_barcodes_expected);
+    # warn "Expected number of read per barcode: $expected_number_of_reads\n"; sleep(1);
+
     foreach my $barcode ( sort { $barcodes_seen{$b} <=> $barcodes_seen{$a} } keys %barcodes_seen ) {
-	my $freq = $barcodes_seen{$barcode} / $actual_count;
+	    my $freq = $barcodes_seen{$barcode} / $actual_count;
 
         my $name = "";
-
+       
         # See if we can match this to an existing barcode
 
-	if (exists $barcode_names{$barcode}) {
-	    $name = $barcode_names{$barcode};
-	}
+        if (exists $barcode_names{$barcode}) {
+            $name = $barcode_names{$barcode};
+        }
+        if ($name){
+            # Fewer than 5000 reads total count will result in an ERROR
+            if ( $barcodes_seen{$barcode} < 5000){
+                $errors{$barcode}->{name}  = $name;
+                $errors{$barcode}->{seen}  = $barcodes_seen{$barcode};
+                $errors{$barcode}->{freq}  = $freq;
+            }
+            elsif( $barcodes_seen{$barcode} < ($expected_number_of_reads / 5) ){
+                # if a read turns up with fewer than 20% of the expected read number we flag it up as WARNING
+                $warnings{$barcode}->{name}      = $name;
+                $warnings{$barcode}->{seen}      = $barcodes_seen{$barcode};
+                $warnings{$barcode}->{expected}  = $expected_number_of_reads;
+            }
+        }
 
         if ( $freq >= $threshold_for_indices or $name ) {
 
@@ -659,12 +682,64 @@ sub get_observed_barcodes {
     }
 
     close BARCODES or die "Can't write to barcode file: $!";
+   
 
     # Run the R Script
     my $barcode_png_file = "$project_folder/barcode_L00${lane}_graph.png";
 
     system("Rscript $Bin/barcode_graph.r $barcode_data_file $barcode_png_file > /dev/null") == 0 or die "Can't run barcode_graph.r script";
 
+    # Now printing to a file called barcode_ERRORS to let people know whether there
+    # were any issues with their barcodes
+    my $barcode_error_file = "$project_folder/barcode_L00${lane}_ERRORS.txt";
+
+    open( BARCODEERRORS, '>', $barcode_error_file ) or die "Can't write to $barcode_error_file: $!";
+    
+    print BARCODEERRORS "To discuss why some multiplexing barcodes (or barcode combinations) are being flagged up as WARNINGS or ERRORs, please see any member of the Bioinformatics Group!\n", "="x162, "\n\n\n";
+    
+    ### WARNINGS
+    print BARCODEERRORS "BARCODE WARNINGS:\n\n";
+
+    if (%warnings){ 
+        print BARCODEERRORS "Observed reads <20% of expected read count\n==========================================\n\n";
+        print BARCODEERRORS join( "\t", ( "Name", "Barcode", "Count", "Expected Count" ) ), "\n";
+        print BARCODEERRORS "-"x37,"\n";
+        
+        foreach my $barcode ( sort { $warnings{$b}->{seen} <=> $warnings{$a}->{seen} } keys %warnings ) {
+            warn "Barcode $warnings{$barcode}->{name} $barcode ($warnings{$barcode}->{seen})\n";
+            print BARCODEERRORS join( "\t", ( $warnings{$barcode}->{name}, $barcode, $warnings{$barcode}->{seen}, $warnings{$barcode}->{expected} ) ), "\n";
+        }
+    }
+    else{
+        print BARCODEERRORS "None\n";
+    }
+    print BARCODEERRORS "\n\n\n";
+
+    ### ERRORS
+    my $rmstring = '';
+    print BARCODEERRORS "BARCODE ERRORS:\n\n";
+    if (%errors){ 
+        print BARCODEERRORS "Total number of reads too low (<5000 reads total)\n=================================================\n\n";
+        print BARCODEERRORS join( "\t", ( "Name", "Barcode", "Count", "Frequency" ) ), "\n";
+        print BARCODEERRORS "-"x33,"\n";
+        foreach my $barcode ( sort { $errors{$b}->{seen} <=> $errors{$a}->{seen} } keys %errors ) {
+            warn "Barcode $errors{$barcode}->{name} $barcode had fewer than 5000 counts! ($errors{$barcode}->{seen})\n";
+            print BARCODEERRORS join( "\t", ( $errors{$barcode}->{name}, $barcode, $errors{$barcode}->{seen}, $errors{$barcode}->{freq} ) ), "\n";
+            $rmstring .= " *$barcode* "
+        }
+    }
+    else{
+        print BARCODEERRORS "None\n";
+    }
+
+    # ADMIN REMOVE COMMAND OF FILES WITH TOO FEW READS
+    if (%errors){
+        print BARCODEERRORS "\n\nTo avoid issues with downstream processing, it is recommended to remove files with no reads or only a very small\nnumber of reads. A command to remove offending files would be (admins only):\n\n";
+        print BARCODEERRORS "rm $rmstring\n\n";
+    }
+
+    close BARCODEERRORS or die "Can't write to barcode error file: $!";
+    
     return @barcodes;
 
 }
@@ -705,7 +780,6 @@ sub get_barcodes {
 
 	@prime5 = sort{$a cmp $b} @prime5;
 	@prime3 = sort{$a cmp $b} @prime3;
-
         # Remove any non-ascii chars in the name
         $name =~ s/[^A-Za-z0-9\-\+\=\:\_]+/_/g;
         my $barcode_name = $prime5[0];
@@ -723,32 +797,32 @@ sub get_barcodes {
         warn "Strange barcodes, Number of 3' barcodes was not the same as the number of 5' and wasn't zero either\n";
         return undef;
     }
-
+   
     # Check all lengths are the same at each end
     my $length5 = undef;
     my $length3 = undef;
 
     foreach my $barcode (@barcodes) {
-	foreach my $prime5 (@{$barcode->[0]}) {
-	    unless ($length5) {
-		$length5 = length($prime5);
-	    }
+	    foreach my $prime5 (@{$barcode->[0]}) {
+	        unless ($length5) {
+		        $length5 = length($prime5);
+	        }
 
-	    if (length($prime5) != $length5) {
-		warn "Barcodes didn't all have the same length at the 5' end\n";
-		return undef;
-	    }
-	}
-	foreach my $prime3 (@{$barcode->[1]}) {
-	    unless ($length3) {
-		$length3 = length($prime3);
-	    }
+            if (length($prime5) != $length5) {
+                warn "Barcodes didn't all have the same length at the 5' end\n";
+                return undef;
+            }
+        }
+	    foreach my $prime3 (@{$barcode->[1]}) {
+	        unless ($length3) {
+		        $length3 = length($prime3);
+	        }
 
-	    if (length($prime3) != $length3) {
-		warn "Barcodes didn't all have the same length at the 3' end\n";
-		return undef;
-	    }
-	}
+            if (length($prime3) != $length3) {
+                warn "Barcodes didn't all have the same length at the 3' end\n";
+                return undef;
+            }
+        }
     }
 
     return \@barcodes;
