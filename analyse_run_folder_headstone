@@ -363,7 +363,7 @@ sub get_split_fastq_file_names {
 
 sub find_completed_lane {
 
-		# Get the list of all outstanding job ids from qstat
+		# Get the list of all outstanding job ids from squeue
 		open (SQUEUE,"squeue -a --format \%j | ") or die "Can't open pipe to squeue: $!";
 	
 
