@@ -3,6 +3,8 @@ use warnings;
 use strict;
 # Adapted for use in headstone 17 12 2019
 
+# 16 Sept 2020: Need to adapt this again to also correctly convert single-end BAM files
+
 my %truseq = get_barcodes();
 my %uni;
 foreach my $code(keys %truseq){
@@ -23,7 +25,6 @@ unless ($sample_sheet) {
 
 unless (@cram_files) {
 		# We just take all of the cram files in the current directory
-
 		@cram_files = <*.cram>;
 }
 
@@ -119,6 +120,32 @@ while (1) {
 
 # Now we need to turn the bam files into fastq files
 
+# First we need to determine whether the BAM file contains single-end or paired-end files
+my $single_end;
+warn ">> Determining single-end/paired-end status of BAM files <<\n";
+if (@bam_to_convert) {
+
+	# Only testing a single line of a single BAM file to see whether it contains FLAGS 0 or 16
+	my $testfile = $bam_to_convert[0];
+	warn "Testing file $testfile for single-end FLAG values\n";
+
+	open (FLAGTEST,"samtools view $testfile |") or die "Failed to read from file '$testfile': $!\n\n";
+
+	my $oneline = <FLAGTEST>;
+	warn "$oneline";
+	my ($flag_value) = (split /\t/,$oneline)[1];
+	if ($flag_value == 0 or $flag_value == 16){
+		warn "Found FLAG value of $flag_value. Setting single-end mode flag and moving on...\n\n";
+		$single_end = 1;
+	}
+	else{
+		warn "Assuming the BAM files are paired-end\n\n";
+		$single_end = 0;
+	}
+	close FLAGTEST;
+
+}
+
 my @fastq_to_compress;
 
 while (1) {
@@ -133,24 +160,44 @@ while (1) {
 						$fastq1 =~ s/\.bam$/_R1.fastq/;
 						$fastq2 =~ s/\.bam$/_R2.fastq/;
 
-						warn "Converting $bam to $fastq1 and $fastq2\n";
 						# This is the old Picard Version
 						# my $command = "/bi/apps/java/jre1.7.0_45/bin/java -Xmx10g -XX:+UseG1GC -XX:ParallelGCThreads=2 -jar /bi/apps/picard/1.88/SamToFastq.jar VALIDATION_STRINGENCY=SILENT QUIET=true INPUT=$bam FASTQ=$fastq1 SECOND_END_FASTQ=$fastq2";
 						# I am now trying out a Samtools approach 18 12 2019
-						my $command = "samtools fastq -1 $fastq1 -2 $fastq2 $bam";
 						
+						my $command;
+
+						if ($single_end){
+							warn "Converting $bam to $fastq1\n";
+							$command = "samtools fastq -0 $fastq1 $bam";
+						}
+						else{ # paired-end, default
+							warn "Converting $bam to $fastq1 and $fastq2\n";
+							$command = "samtools fastq -1 $fastq1 -2 $fastq2 $bam";
+						}
+
 						my $cluster_command = "ssub -o ${bam}_bam2fastq.log -J ${bam}_bam2fq --mem=20G \"$command\"";
 						# my $job_value = `qsub -o ${bam}_bam2fastq.log -S /bin/bash -l h_vmem=20G $command`;
 						my $job_value = `$cluster_command`;
 
 						if ($job_value =~ /job (\d+)/) {
-								warn "Submitted job '$1'\n";
-								push @job_ids,$1;
+							warn "Submitted job '$1'\n";
+							push @job_ids,$1;
+							
+							if ($single_end){
+								push @fastq_to_compress,$fastq1;
+							}
+							else{
 								push @fastq_to_compress,$fastq1,$fastq2;
-								next;
+							}
+							next;
 						}
 						else {
+							if ($single_end){
+								die "Failed to submit bam2fastq conversion for $bam into $fastq1: $job_value";
+							}
+							else{
 								die "Failed to submit bam2fastq conversion for $bam into $fastq1 and $fastq2: $job_value";
+							}
 						}
 				}
 
