@@ -40,7 +40,7 @@ unless ($present){
 }
 
 ### Extracting run parameters from RunInfo.xml file
-warn "Reading RunInfo.xml file\n"; 
+warn "Reading RunInfo.xml file\n";
 $verbose and sleep(1);
 my $instrument = read_RunInfo_file();
 
@@ -67,10 +67,11 @@ if ($miseq){
     rename_MiSeq_sample_sheet();
 }
 
-### Configure Run
-warn "Running the bcl2fastq configuration\n";
-$verbose and sleep(1);
-configure_bcl2fastq();
+### Update 15 April 2021: the following configuaration no longer works, see below
+# ### Configure Run
+# warn "Running the bcl2fastq configuration\n";
+# $verbose and sleep(1);
+# configure_bcl2fastq();
 
 unless ($nextseq) {
 		### Create Aligned Folder
@@ -78,10 +79,13 @@ unless ($nextseq) {
 		$verbose and sleep(1);
 		create_Aligned_folder();
 
-    ### Run Make command
-		warn "Preparing to launch make command (run processing)\n";
+    	### Update 15 April 2021: An update to our Illumina machines required us to also upgrade to bcl2fastq2
+		#   this also means that we do no longer use configureBclToFastq.pl, but use bcl2fastq instead
+		
+		### Run Make command
+		warn "Preparing to launch bcl2fastq command (run processing)\n";
 		$verbose and sleep(1);
-		run_make();
+		run_bcl2fastq();
 
 
 		### Rename FastQ cluster files
@@ -181,7 +185,7 @@ sub rename_fastq_cluster_files{
 }
 
 sub run_make{
-    
+    ### Update 15 April 2021: This is now obsolete
     chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder<. Processing cancelled.\n\n";
     
     ### Run make command
@@ -427,52 +431,53 @@ sub check_cycles{
     }
 }
 
-sub configure_bcl2fastq{
+sub run_bcl2fastq{
     ### Configure the BCL to FASTQ conversion; convert bcl files (also .bcl.gz) to FastQ files
 
-		if ($nextseq) {
-				# NextSeq runs use a different bcl2fastq program to MiSeqs or HiSeqs
-				# so their process is completely different
+	if ($nextseq) {
+			# NextSeq runs use a different bcl2fastq program to MiSeqs or HiSeqs
+			# so their process is completely different
 
-				my $bases_mask;
-				foreach my $number (sort keys %run){
-						$bases_mask .= "," if ($bases_mask);
-						$bases_mask .= "y*";
-				}
+			my $bases_mask;
+			foreach my $number (sort keys %run){
+					$bases_mask .= "," if ($bases_mask);
+					$bases_mask .= "y*";
+			}
 
-				my $command = "bcl2fastq --runfolder-dir ${full_run_folder} --output-dir ${full_run_folder}/Unaligned --use-bases-mask $bases_mask --minimum-trimmed-read-length 0 --mask-short-adapter-reads 0 -p 16";
-				warn "Running the following command\n$command\n";
-    
-				system ($command) == 0 or die "Failed to execute bcl2fastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";				
-		}
+			my $command = "bcl2fastq --runfolder-dir ${full_run_folder} --output-dir ${full_run_folder}/Unaligned --use-bases-mask $bases_mask --minimum-trimmed-read-length 0 --mask-short-adapter-reads 0 -p 16";
+			warn "Running the following command\n$command\n";
 
-		else {
-				my $bases_mask;
-				foreach my $number (sort keys %run){
-						$bases_mask .= "y$run{$number}->{cycles},";
-				}
+			system ($command) == 0 or die "Failed to execute bcl2fastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";				
+	}
+	else {
+			my $bases_mask;
+			foreach my $number (sort keys %run){
+				$bases_mask .= "y$run{$number}->{cycles},";
+			}
 
-				# deleting a trailing comma
-				$bases_mask =~ s/,$//;
+			# deleting a trailing comma
+			$bases_mask =~ s/,$//;
 
-				my $overwrite = '';
-				if ($force){
-						$overwrite = '--force';
-				}
-    
-				# setting the maximum number of sequences per fastq cluster file to 1bn so that we don't have to run the combine_fastq script
-				my $command = "configureBclToFastq.pl $overwrite --fastq-cluster-count 1000000000 --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask";
-				warn "Running the following command\n$command\n";
-    
-				system ($command) == 0 or die "Failed to execute configureBclToFastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";
-    }
+			my $overwrite = '';
+			if ($force){
+				$overwrite = '--force';
+			}
+
+			# setting the maximum number of sequences per fastq cluster file to 1bn so that we don't have to run the combine_fastq script
+			# my $command = "configureBclToFastq.pl $overwrite --fastq-cluster-count 1000000000 --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask";
+			
+			my $command = "bcl2fastq $overwrite --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask --output-dir ${full_run_folder}Unaligned/ --mask-short-adapter-reads 0";
+			warn "Running the following command\n$command\n";
+
+			system ($command) == 0 or die "Failed to execute bcl2fastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";
+}
 }
 
 
 sub process_commandline{
     my $help;
     my $miseq;
-		my $nextseq;
+	my $nextseq;
     my $paired;
     my $global_single;
     my $global_paired;
