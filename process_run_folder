@@ -223,7 +223,7 @@ sub rename_fastq_cluster_files{
 
 			my $rmdir_command = "Project_$run{1}->{flowcell}/Sample_lane${laneID}";
 			warn "Executing rmdir command: $rmdir_command\n";
-			system($rmdir_command) == 0 or die "Failed to remove folder Sample_lane{$lampleID}";
+			system($rmdir_command) == 0 or die "Failed to remove folder Sample_lane{$laneID}";
 		}
 	}
 
