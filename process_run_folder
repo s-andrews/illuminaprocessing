@@ -171,6 +171,13 @@ sub rename_fastq_cluster_files{
 	# Undetermined_S0_L001_R1_001.fastq.gz
 	# Undetermined_S0_L001_R2_001.fastq.gz
 
+	# keeping track of lanes used
+	my %used_lanes;
+	
+	for (1..8){
+		$used_lanes{$_} = 0;
+	}
+
 	my @files = <*_001\.fastq\.gz>;
 	foreach my $lane (qw(L001 L002 L003 L004 L005 L006 L007 L008)) {
 		# warn "Processing lane $lane\n";
@@ -198,6 +205,7 @@ sub rename_fastq_cluster_files{
 					my $move_command = "mv $newfile Project_$run{1}->{flowcell}/Sample_lane${lane_number}";
 					# warn "Executing Move command: $move_command\n";
 					system($move_command) == 0 or die "Failed to move file $newfile to a Sample folder";
+					$used_lanes{$lane_number}++;
 				}
 				else{
 					$verbose and warn "Renaming from '$file' to '$newfile' failed: $!\n";
@@ -207,6 +215,12 @@ sub rename_fastq_cluster_files{
 	}
 
     warn "Renaming complete\n\n";
+
+	warn "removing unused Sample_lanes\n";
+	foreach my $laneID (keys %used_lanes){
+		warn "$laneID\t$used_lanes{$laneID}\n";
+	}
+
 }
 
 sub run_make{
