@@ -204,6 +204,9 @@ sub rename_fastq_cluster_files{
 				$newfile =~ s/^Undetermined_S0/lane${lane_number}_NoIndex/;
 				if  (rename $file, $newfile){
 					$verbose and warn "Renamed '$file' to '$newfile'\n";
+					my $move_command = "mv $newfile Project_$run{1}->{flowcell}/Sample_lane{$lane_number}";
+					warn "Executing Move command: $move_command\n";
+					system($move_command) == 0 or die "Failed to move file $newfile to a Sample folder";
 				}
 				else{
 					$verbose and warn "Renaming from '$file' to '$newfile' failed: $!\n";
@@ -211,17 +214,8 @@ sub rename_fastq_cluster_files{
 			}
 		}
 	}
-    # else {
-	# 	warn "Found no files for $read : Skipping\n";
-	# }	
-
-					#my $command = "zcat @files | gzip -4 -c > /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/lane1_NoIndex_L001_${read}.fastq.gz";
-
-
-
-					#warn "Backing up $read\n";
-
-					#system($command) == 0 or die "Failed to back up $read for $run_folder";
+   
+	
 
     warn "Renaming complete\n\n";
 }
