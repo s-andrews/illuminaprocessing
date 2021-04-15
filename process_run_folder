@@ -183,6 +183,14 @@ sub rename_fastq_cluster_files{
 	my @files = <*_001\.fastq\.gz>;
 	foreach my $lane (qw(L001 L002 L003 L004 L005 L006 L007 L008)) {
 		warn "Processing lane $lane\n";
+		my $lane_number;
+
+		if ($lane =~ /^L00(\d)$/){
+			$lane_number = $1;
+		} 
+		else{
+			die "This may never happen";
+		}
 
 		foreach my $read (qw(R1 R2 R3 R4)) {
 			warn "Processing lane $lane, read $read\n";
@@ -190,9 +198,10 @@ sub rename_fastq_cluster_files{
 			my @lanefiles = <*${lane}_${read}_*>;
 			foreach my $file (@lanefiles){
 				warn "Processing lane $lane, read $read, and file $file\n";
-		
+
 				my $newfile = $file;
 				$newfile =~ s/_001\.fastq\.gz$/.fastq.gz/;
+				$newfile =~ s/^Undetermined_S0/lane{$lane_number}_NoIndex_/;
 				if  (rename $file, $newfile){
 					$verbose and warn "Renamed '$file' to '$newfile'\n";
 				}
