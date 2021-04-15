@@ -141,11 +141,7 @@ sub backup_run{
 
 		}
 
-		else {
-
-			### Update 15 April 2021: We need to adapt this to using bcl2fastq instead
-
-			create_Unaligned_folder();
+		else {}
 
 			chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
 
@@ -164,6 +160,9 @@ sub backup_run{
 
 sub rename_fastq_cluster_files{
     
+	### Update 15 April 2021: We need to adapt this to using bcl2fastq instead
+	create_Unaligned_folder();
+
     chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
     
     my @folders = <Sample_lane*>;
