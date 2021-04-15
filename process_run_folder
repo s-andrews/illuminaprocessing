@@ -466,7 +466,7 @@ sub run_bcl2fastq{
 			# setting the maximum number of sequences per fastq cluster file to 1bn so that we don't have to run the combine_fastq script
 			# my $command = "configureBclToFastq.pl $overwrite --fastq-cluster-count 1000000000 --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask";
 			
-			my $command = "bcl2fastq $overwrite --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask --output-dir ${full_run_folder}Unaligned/ --mask-short-adapter-reads 0";
+			my $command = "bcl2fastq $overwrite --runfolder-dir ${full_run_folder} -p 16 --use-bases-mask $bases_mask --output-dir ${full_run_folder}Unaligned/ --minimum-trimmed-read-length 0 --mask-short-adapter-reads 0";
 			warn "Running the following command\n$command\n";
 
 			system ($command) == 0 or die "Failed to execute bcl2fastq command properly. Exit status was '$?'. Consider rerunning the command using --force?\n";
