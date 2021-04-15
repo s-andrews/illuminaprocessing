@@ -161,6 +161,7 @@ sub backup_run{
 sub rename_fastq_cluster_files{
     
 	### Update 15 April 2021: We need to adapt this to using bcl2fastq instead
+	# Hopefully this will work for both MiSeq and HiSeq runs
 	create_Unaligned_folder();
 
     #chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
@@ -170,19 +171,9 @@ sub rename_fastq_cluster_files{
 	# Undetermined_S0_L001_R1_001.fastq.gz
 	# Undetermined_S0_L001_R2_001.fastq.gz
 
-    # my @folders = <Sample_lane*>;
-    # foreach my $folder (@folders){
-	# 	warn "$folder\n";
-	# 	chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}/$folder" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}/$folder<\n";
-	# 	
-	# 	if (-e 'SampleSheet.csv'){
-	# 		unlink 'SampleSheet.csv' or warn "Failed to delete file 'SampleSheet.csv': $!\n";
-	# 		$verbose and warn "Removed file 'SampleSheet.csv' from '$folder'\n";
-	# 	}
-
 	my @files = <*_001\.fastq\.gz>;
 	foreach my $lane (qw(L001 L002 L003 L004 L005 L006 L007 L008)) {
-		warn "Processing lane $lane\n";
+		# warn "Processing lane $lane\n";
 		my $lane_number;
 
 		if ($lane =~ /^L00(\d)$/){
@@ -193,11 +184,11 @@ sub rename_fastq_cluster_files{
 		}
 
 		foreach my $read (qw(R1 R2 R3 R4)) {
-			warn "Processing lane $lane, read $read\n";
+			# warn "Processing lane $lane, read $read\n";
 
 			my @lanefiles = <*${lane}_${read}_*>;
 			foreach my $file (@lanefiles){
-				warn "Processing lane $lane, read $read, and file $file\n";
+				# warn "Processing lane $lane, read $read, and file $file\n";
 
 				my $newfile = $file;
 				$newfile =~ s/_001\.fastq\.gz$/.fastq.gz/;
@@ -205,7 +196,7 @@ sub rename_fastq_cluster_files{
 				if  (rename $file, $newfile){
 					$verbose and warn "Renamed '$file' to '$newfile'\n";
 					my $move_command = "mv $newfile Project_$run{1}->{flowcell}/Sample_lane${lane_number}";
-					warn "Executing Move command: $move_command\n";
+					# warn "Executing Move command: $move_command\n";
 					system($move_command) == 0 or die "Failed to move file $newfile to a Sample folder";
 				}
 				else{
@@ -214,8 +205,6 @@ sub rename_fastq_cluster_files{
 			}
 		}
 	}
-   
-	
 
     warn "Renaming complete\n\n";
 }
