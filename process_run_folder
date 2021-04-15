@@ -141,7 +141,7 @@ sub backup_run{
 
 		}
 
-		else {}
+		else {
 
 			chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
 
