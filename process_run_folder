@@ -216,8 +216,8 @@ sub rename_fastq_cluster_files{
 
     warn "Renaming complete\n\n";
 
-	warn "removing unused Sample_lanes\n";
-	foreach my $laneID (keys %used_lanes){
+	warn "Removing unused Sample_lanes\n";
+	foreach my $laneID (sort keys %used_lanes){
 		# warn "$laneID\t$used_lanes{$laneID}\n";
 		if ($used_lanes{$laneID} == 0){ # lane is empty, and may be removed. Else the barcode splitting will go awry
 
