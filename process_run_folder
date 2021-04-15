@@ -221,9 +221,9 @@ sub rename_fastq_cluster_files{
 		# warn "$laneID\t$used_lanes{$laneID}\n";
 		if ($used_lanes{$laneID} == 0){ # lane is empty, and may be removed. Else the barcode splitting will go awry
 
-			my $rmdir_command = "Project_$run{1}->{flowcell}/Sample_lane${laneID}";
+			my $rmdir_command = "rmdir Project_$run{1}->{flowcell}/Sample_lane${laneID}";
 			warn "Executing rmdir command: $rmdir_command\n";
-			system($rmdir_command) == 0 or die "Failed to remove folder Sample_lane{$laneID}";
+			system($rmdir_command) == 0 or die "Failed to remove folder Sample_lane${laneID}";
 		}
 	}
 
