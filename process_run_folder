@@ -203,7 +203,7 @@ sub rename_fastq_cluster_files{
 				if  (rename $file, $newfile){
 					$verbose and warn "Renamed '$file' to '$newfile'\n";
 					my $move_command = "mv $newfile Project_$run{1}->{flowcell}/Sample_lane${lane_number}";
-					# warn "Executing Move command: $move_command\n";
+					warn "Executing Move command: $move_command\n";
 					system($move_command) == 0 or die "Failed to move file $newfile to a Sample folder";
 					$used_lanes{$lane_number}++;
 				}
@@ -222,7 +222,7 @@ sub rename_fastq_cluster_files{
 		if ($used_lanes{$laneID} == 0){ # lane is empty, and may be removed. Else the barcode splitting will go awry
 
 			my $rmdir_command = "rmdir Project_$run{1}->{flowcell}/Sample_lane${laneID}";
-			warn "Executing rmdir command: $rmdir_command\n";
+			warn "Executing command: $rmdir_command\n";
 			system($rmdir_command) == 0 or die "Failed to remove folder Sample_lane${laneID}";
 		}
 	}
