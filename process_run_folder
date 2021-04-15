@@ -194,9 +194,9 @@ sub rename_fastq_cluster_files{
 			}
 		}
     }
-    else {
-		warn "Found no files for $read : Skipping\n";
-	}	
+    # else {
+	# 	warn "Found no files for $read : Skipping\n";
+	# }	
 
 					#my $command = "zcat @files | gzip -4 -c > /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/lane1_NoIndex_L001_${read}.fastq.gz";
 
