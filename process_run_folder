@@ -142,15 +142,22 @@ sub backup_run{
 		}
 
 		else {
-				chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder. Not performing backup\n\n";
-				chdir ".." or die "Failed to move into folder: >..< Not performing backup\n\n";
-    
-				warn "Now backing up $run_folder\n";
-    
-				my $command = "tar cf - $run_folder --exclude=$run_folder/Data* --exclude=Temp --exclude=Thumbnail_Images --exclude=*.cif --exclude=*.bcl --exclude=*_pos.txt --exclude=*.clocs --exclude=$run_folder/Images* | (cd /primary/ && tar xfp -)";
-				$verbose and warn "Running command\n$command\n";
-				system($command) == 0 or die "Failed to back up $run_folder\n";
-		}
+
+			### Update 15 April 2021: We need to adapt this to using bcl2fastq instead
+
+			create_Unaligned_folder();
+
+			chdir "${full_run_folder}Unaligned/Project_$run{1}->{flowcell}" or die "Failed to move into folder: >${full_run_folder}Unaligned/Project_$run{1}->{flowcell}<. Processing cancelled.\n\n";
+
+			chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder. Not performing backup\n\n";
+			chdir ".." or die "Failed to move into folder: >..< Not performing backup\n\n";
+
+			warn "Now backing up $run_folder\n";
+
+			my $command = "tar cf - $run_folder --exclude=$run_folder/Data* --exclude=Temp --exclude=Thumbnail_Images --exclude=*.cif --exclude=*.bcl --exclude=*_pos.txt --exclude=*.clocs --exclude=$run_folder/Images* | (cd /primary/ && tar xfp -)";
+			$verbose and warn "Running command\n$command\n";
+			system($command) == 0 or die "Failed to back up $run_folder\n";
+	}
 }
 
 
@@ -199,46 +206,95 @@ sub create_Aligned_folder{
     chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder<. Processing cancelled.\n\n";
     
     unless (-d 'Aligned'){
-	mkdir 'Aligned' or die "Failed to create folder 'Aligned'\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned\n";    
+		mkdir 'Aligned' or die "Failed to create folder 'Aligned'\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned\n";    
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}\n";    
+		mkdir "Aligned/Project_$run{1}->{flowcell}" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}\n";    
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane1"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane1" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane1': $!\n"; 
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane1/\n";
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane1" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane1': $!\n"; 
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane1/\n";
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane2"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane2" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane2': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane2/\n";
-    }
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane2" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane2': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane2/\n";
+	}
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane3"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane3" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane3': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane3/\n";
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane3" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane3': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane3/\n";
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane4"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane4" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane4': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane4/\n";
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane4" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane4': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane4/\n";
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane5"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane5" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane5': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane5/\n";
-    }
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane5" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane5': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane5/\n";
+	}
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane6"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane6" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane6': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane6/\n";
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane6" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane6': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane6/\n";
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane7"){
 	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane7" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane7': $!\n";
 	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane7/\n";
     }
     unless (-d "Aligned/Project_$run{1}->{flowcell}/Sample_lane8"){
-	mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane8" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane8': $!\n";
-	$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane8/\n";
+		mkdir "Aligned/Project_$run{1}->{flowcell}/Sample_lane8" or die "Failed to create folder 'Aligned/Project_$run{1}->{flowcell}/Sample_lane8': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Aligned/Project_${run{1}->{flowcell}}/Sample_lane8/\n";
     }
     warn "Successfully created all folders in the Aligned section\n";
+    
+    chdir "$parent_dir" or die "Failed to move into folder: >$parent_dir<. Processing cancelled.\n\n";
+
+}
+
+sub create_Unaligned_folder{
+    chdir "$full_run_folder" or die "Failed to move into folder: >$full_run_folder<. Processing cancelled.\n\n";
+    
+    unless (-d 'Unaligned'){
+		mkdir 'Unaligned' or die "Failed to create folder 'Unaligned'\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned\n";    
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}\n";    
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane1"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane1" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane1': $!\n"; 
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane1/\n";
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane2"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane2" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane2': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane2/\n";
+	}
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane3"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane3" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane3': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane3/\n";
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane4"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane4" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane4': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane4/\n";
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane5"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane5" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane5': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane5/\n";
+	}
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane6"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane6" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane6': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane6/\n";
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane7"){
+	mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane7" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane7': $!\n";
+	$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane7/\n";
+    }
+    unless (-d "Unaligned/Project_$run{1}->{flowcell}/Sample_lane8"){
+		mkdir "Unaligned/Project_$run{1}->{flowcell}/Sample_lane8" or die "Failed to create folder 'Unaligned/Project_$run{1}->{flowcell}/Sample_lane8': $!\n";
+		$verbose and warn "Created folder ${full_run_folder}Unaligned/Project_${run{1}->{flowcell}}/Sample_lane8/\n";
+    }
+    warn "Successfully created all folders in the Unaligned section\n";
     
     chdir "$parent_dir" or die "Failed to move into folder: >$parent_dir<. Processing cancelled.\n\n";
 
@@ -465,7 +521,6 @@ sub run_bcl2fastq{
 
 			# setting the maximum number of sequences per fastq cluster file to 1bn so that we don't have to run the combine_fastq script
 			# my $command = "configureBclToFastq.pl $overwrite --fastq-cluster-count 1000000000 --input-dir ${full_run_folder}Data/Intensities/BaseCalls/ --use-bases-mask $bases_mask";
-			
 			my $command = "bcl2fastq $overwrite --runfolder-dir ${full_run_folder} -p 16 --use-bases-mask $bases_mask --output-dir ${full_run_folder}Unaligned/ --minimum-trimmed-read-length 0 --mask-short-adapter-reads 0";
 			warn "Running the following command\n$command\n";
 
