@@ -198,14 +198,14 @@ sub rename_fastq_cluster_files{
 		warn "Found no files for $read : Skipping\n";
 	}	
 
-					my $command = "zcat @files | gzip -4 -c > /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/lane1_NoIndex_L001_${read}.fastq.gz";
+					#my $command = "zcat @files | gzip -4 -c > /primary/${run_folder}/Unaligned/Project_NextSeq/Sample_lane1/lane1_NoIndex_L001_${read}.fastq.gz";
 
-					$verbose and warn "Running '$command'\n";
+					#$verbose and warn "Running '$command'\n";
 
-					warn "Backing up $read\n";
+					#warn "Backing up $read\n";
 
 					#system($command) == 0 or die "Failed to back up $read for $run_folder";
-					
+
     warn "Renaming complete\n\n";
 }
 
