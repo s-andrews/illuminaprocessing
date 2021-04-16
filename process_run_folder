@@ -72,8 +72,12 @@ if ($miseq){
 # warn "Running the bcl2fastq configuration\n";
 # $verbose and sleep(1);
 # configure_bcl2fastq();
-
-unless ($nextseq) {
+if ($nextseq){
+	warn "Preparing to launch bcl2fastq command for NextSeq run (run processing)\n";
+	$verbose and sleep(1);
+	run_bcl2fastq();
+}
+else ($nextseq) {
 		### Create Aligned Folder
 		warn "Creating 'Aligned' folder and subfolders\n";
 		$verbose and sleep(1);
@@ -82,7 +86,7 @@ unless ($nextseq) {
     	### Update 15 April 2021: An update to our Illumina machines required us to also upgrade to bcl2fastq2
 		#   this also means that we do no longer use configureBclToFastq.pl, but use bcl2fastq instead
 		
-		### Run Make command
+		### Run bcl2fastq command
 		warn "Preparing to launch bcl2fastq command (run processing)\n";
 		$verbose and sleep(1);
 		run_bcl2fastq();
@@ -450,25 +454,25 @@ sub determine_run_type{
     if ($miseq){ # set by user, proceeding 
 				$verbose and warn "Run set as: MiSeq (user defined)\n";
     }
-		elsif ($nextseq) {
-				$verbose and warn "Run set as: NextSeq (user defined)\n";
-		}
+	elsif ($nextseq) {
+		$verbose and warn "Run set as: NextSeq (user defined)\n";
+	}
     else{
-				if (exists $valid_MiSeq_machines{$instrument} ){
-						$verbose and warn "Run set as: MiSeq (known MiSeq model >$instrument<)\n"; 
-						$miseq = 1;
-				}
-				elsif (exists $valid_HiSeq_machines{$instrument} ){
-						$verbose and warn "Run set as: HiSeq (known HiSeq model >$instrument<)\n"; 
-						$miseq = 0;
-				}
-				elsif (exists $valid_NextSeq_machines{$instrument} ){
-						$verbose and warn "Run set as: NextSeq (known NextSeq model >$instrument<)\n"; 
-						$nextseq = 1;
-				}
-				else {
-						$verbose and warn "Unknown instrument '$instrument' - guessing at HiSeq\n";
-				}
+		if (exists $valid_MiSeq_machines{$instrument} ){
+				$verbose and warn "Run set as: MiSeq (known MiSeq model >$instrument<)\n"; 
+				$miseq = 1;
+		}
+		elsif (exists $valid_HiSeq_machines{$instrument} ){
+				$verbose and warn "Run set as: HiSeq (known HiSeq model >$instrument<)\n"; 
+				$miseq = 0;
+		}
+		elsif (exists $valid_NextSeq_machines{$instrument} ){
+				$verbose and warn "Run set as: NextSeq (known NextSeq model >$instrument<)\n"; 
+				$nextseq = 1;
+		}
+		else {
+				$verbose and warn "Unknown instrument '$instrument' - guessing at HiSeq\n";
+		}
     }
     $verbose and sleep(1);
 }
