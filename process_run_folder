@@ -77,7 +77,7 @@ if ($nextseq){
 	$verbose and sleep(1);
 	run_bcl2fastq();
 }
-else ($nextseq) {
+else{
 		### Create Aligned Folder
 		warn "Creating 'Aligned' folder and subfolders\n";
 		$verbose and sleep(1);
