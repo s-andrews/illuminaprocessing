@@ -21,11 +21,11 @@ my @run_folders = <*>;
 foreach my $folder (@run_folders) {
     #	sleep(1);
     warn "Looking at $folder\n";
-    if ($folder =~ /^2/){ # deleting fronm 2019 and before
+    if ($folder =~ /^21/){ # deleting fronm 2019 and before
 	warn "Folder is too new, skipping...\n";
 	next;
     }
-    # last if ($folder =~ /^16/); # just temporary for testing
+    #last if ($folder =~ /^16/); # just temporary for testing
  
     # TODO: Add in the Immunity Date
     # Date:Manip 
