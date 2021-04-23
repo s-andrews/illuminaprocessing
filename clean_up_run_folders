@@ -21,7 +21,7 @@ my @run_folders = <*>;
 foreach my $folder (@run_folders) {
     #	sleep(1);
     warn "Looking at $folder\n";
-    if ($folder =~ /^18/){
+    if ($folder =~ /^2/){ # deleting fronm 2019 and before
 	warn "Folder is too new, skipping...\n";
 	next;
     }
