@@ -142,6 +142,9 @@ if (@bam_to_convert) {
 		if ($flag_value == 4){ # unmapped
 			next;
 		}
+		if ($flag_value == 1024){ # optical duplicate
+			next;
+		}
 
 		if ($flag_value == 0 or $flag_value == 16){
 			warn "Found FLAG value of $flag_value. Setting single-end mode flag and moving on...\n\n";
@@ -149,7 +152,7 @@ if (@bam_to_convert) {
 			last;
 		}
 		else{
-			warn "Assuming the BAM files are paired-end\n\n";
+			warn "Found FLAG value of $flag_value. Assuming the BAM files are paired-end\n\n";
 			$single_end = 0;
 			last;
 		}
