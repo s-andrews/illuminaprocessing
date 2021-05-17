@@ -2,8 +2,11 @@
 use warnings;
 use strict;
 use DBI;
+use POSIX ":sys_wait_h";
 
 # Update 16 Sept 2020: Adapting this script to work with Nextflow instead of CF
+# Update May 17: working again (+ easing of lockdown restrictions and Beyond burgers)
+
 
 my $data_folder = "/bi/seqfac/seqfac";
 my $working_folder = "/bi/scratch/run_processing";
@@ -98,7 +101,7 @@ warn "Started waiting for jobs to complete at ".scalar localtime(time)."\n";
 while (1) {
 
 	my ($lane) = find_completed_lane();
-	warn "Lane processing hasn't finished just yet...\n";
+	# warn "Lane processing hasn't finished just yet...\n";
 	if ($lane) {
 		copy_back_lane($run_folder,$lane);
 	}
@@ -182,20 +185,29 @@ sub process_lane {
 		warn "scBS-seq or scSNMT-seq require processing in single end mode. Setting --single_end\n\n";
 	}
 
-	my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files 2>&1 |";
+	# We need to tell Nextflow not to read (and write) to the terminal window, as this will lead to the command causing the 
+	# script to sleep when wrapped in """ nohup analise_run_folder FOLDERNAME & """" (reading input from nohup won't work)
+	
+	# There are two ways around this:
+	### (a) telling nextflow to to print anything with -quiet
+	### my $cluster_command = "nextflow -quiet run ${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files";
+
+	### or (b) not using the ansi-log. This will write the executed commands to the log, but not try overwrite itself in place
+	my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files -ansi-log false";
+	
+	#my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files 2>&1 |";
 	warn "Launching the following Cluster command:\n$cluster_command\n";
 	
-	my $job_id = open (my $fh, $cluster_command) or die "Can't open pipe to Nextflow: $!";
-	
+	# my $job_id = open (my $fh, $cluster_command) or die "Can't open pipe to Nextflow: $!";
+	my $job_id = fork() or exec($cluster_command);
+
+	# my $job_id = open (my $fh, $cluster_command) or die "Can't open pipe to Nextflow: $!";
+
 	# Storing open filehandles. We need to close them later once the Nextflow process has completed
 	# We can determine this using `ps --pid PID` and checking for the presence of <defunct> in its output
-	$open_filehandles{$lane} = $fh;
+	# $open_filehandles{$lane} = $fh;
 	warn "The current pid is: $job_id\n\n";
 	
-	unless ($job_id) {
-		die "Failed to parse a job id from the last submission";
-	}
-
 	return ($job_id);
 
 }
@@ -383,22 +395,23 @@ sub find_completed_lane {
 		# ids are still active
 
 		LANE: foreach my $lane (keys %job_ids_to_wait_for) {
-				warn "lane $lane\n";
+				# warn "lane $lane\n";
 
-				my $output = `ps --pid $job_ids_to_wait_for{$lane}`;
-				warn "$output\n";
+				# this way would probably work as well, but we now went for the the waitpid solution and use POSIX	
+				# my $output = `ps --pid $job_ids_to_wait_for{$lane}`;
+				# warn "$output\n";
 				
 				# This is an example output:
 				# PID TTY          TIME CMD
  				# 94507 pts/7    00:00:10 java
 				
-				if ($output =~ /$job_ids_to_wait_for{$lane}/){
-					warn "Process $job_ids_to_wait_for{$lane} is still running...\n";
-					if ($output =~ /defunct/){
-						warn "Closing defunct filehandle...\n";
-						close $open_filehandles{$lane} or warn "Failed to close filehandle for $lane\n\n";
-						# next time round this should no longer evaluate true
-					}
+				if (waitpid ($job_ids_to_wait_for{$lane},WNOHANG) == 0 ){
+					# warn "Process $job_ids_to_wait_for{$lane} is still running...\n";
+					# if ($output =~ /defunct/){
+					# 	warn "Closing defunct filehandle...\n";
+					# 	close $open_filehandles{$lane} or warn "Failed to close filehandle for $lane\n\n";
+					# 	# next time round this should no longer evaluate true
+					# }
 					next LANE;
 				}
 				else{
