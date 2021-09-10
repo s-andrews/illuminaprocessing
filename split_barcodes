@@ -418,17 +418,19 @@ sub split_files {
                 last;
             }
 
-            # We need to reverse complement the barcode 2 sequence
-            # if this was generated on a next seq
-            if ($is_next_seq) {
+            # We need to reverse complement the barcode 2 sequence if this was generated on a NextSeq
+	    # Update 10 09 2021 
+	    # There were issues with the practice of reversing the sequence first and then taking the substring
+	    # I am going to change the order this is done in (after a conversion with Stephen and Milly)
+	    
+	    $barcode2 = substr( $barcode2, 0, $barcode2_length );
 
+            if ($is_next_seq) {
                 # As we're reversing we need to remove the newline from the end
                 $barcode2 =~ s/[\r\n]//g;
                 $barcode2 = reverse($barcode2);
                 $barcode2 =~ tr/GATCgatc/CTAGctag/;
             }
-
-            $barcode2 = substr( $barcode2, 0, $barcode2_length );
 
             $barcode .= "_$barcode2";
         }
