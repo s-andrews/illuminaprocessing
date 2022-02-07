@@ -5,14 +5,17 @@ use DBI;
 use POSIX ":sys_wait_h";
 
 # Update 16 Sept 2020: Adapting this script to work with Nextflow instead of CF
-# Update May 17: working again (+ easing of lockdown restrictions and Beyond burgers)
+# Update May '17: working again (+ easing of lockdown restrictions and beyond burgers)
+# Update Feb '22: Adding a --prefix for the Nextflow command so we got better names for MultiQC
+  # and bismark summary reports.
 
 
 my $data_folder = "/bi/seqfac/seqfac";
 my $working_folder = "/bi/scratch/run_processing";
 
 my $copy_back_files_path = '/bi/apps/copy_back_files/0.1/copy_back_files';
-my $nextflow_path = '/bi/apps/nextflow/nextflow_pipelines/';
+# my $nextflow_path = '/bi/apps/nextflow/nextflow_pipelines/';
+my $nextflow_path = '/bi/home/fkrueger/VersionControl/nextflow_pipelines/';
 
 my $which_nf = `which nextflow`;
 if ($which_nf eq ''){
@@ -21,6 +24,7 @@ if ($which_nf eq ''){
 else{
 	# warn "Output of which: $which_nf\n";
 }
+
 
 my %open_filehandles;
 
@@ -118,6 +122,8 @@ warn "All jobs complete at ".scalar localtime(time)."\n";
 
 sub process_lane {
     my ($run_folder,$lane) = @_;
+	
+	my $prefix = ""; # need this for MultiQC and Bismark Summary reports
 
     warn "Processing $run_folder lane $lane\n";
 
@@ -173,6 +179,36 @@ sub process_lane {
 	# Now we need to link these files into the working directory
 	foreach my $file (@files_to_link) {
 		warn "Linking $file\n";
+
+		# Setting the prefix
+		unless ($prefix){
+			$prefix = $file;
+			# warn "$prefix\n";
+			$prefix =~ s/.*\///;
+			# warn "$prefix\n";
+			my $prefix_lane_number;
+			my $prefix_laneID;
+			# first word/characters up to an underscore _
+			if ($prefix =~ /^(.*?)_/){
+				$prefix_lane_number = $1;
+			}
+			else{
+				$prefix_lane_number = "filename_had_no_underscores";
+			}
+			# warn "$prefix_lane_number\n";
+
+			# Extracting the laneID
+			if ($prefix =~ /(L00\d)/){
+				$prefix_laneID = $1;
+			}
+			else{
+				$prefix_laneID= "filename_had_no_laneID";
+			}
+			# warn "$prefix_laneID\n";		
+			$prefix = "${prefix_lane_number}_${prefix_laneID}_";
+			# warn "$prefix\n";
+		}
+		
 		my $just_file = (split(/\//,$file))[-1];
 		symlink($file,$just_file) or die "Can't symlink $file: $!";
 		push @linked_files, $just_file;
@@ -193,7 +229,7 @@ sub process_lane {
 	### my $cluster_command = "nextflow -quiet run ${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files";
 
 	### or (b) not using the ansi-log. This will write the executed commands to the log, but not try overwrite itself in place
-	my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files -ansi-log false";
+	my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files -ansi-log false --prefix $prefix";
 	
 	#my $cluster_command = "${nextflow_path}$pipeline $single_end_parameter --genome $genome @linked_files 2>&1 |";
 	warn "Launching the following Cluster command:\n$cluster_command\n";
