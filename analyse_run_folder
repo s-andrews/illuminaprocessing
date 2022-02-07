@@ -14,8 +14,7 @@ my $data_folder = "/bi/seqfac/seqfac";
 my $working_folder = "/bi/scratch/run_processing";
 
 my $copy_back_files_path = '/bi/apps/copy_back_files/0.1/copy_back_files';
-# my $nextflow_path = '/bi/apps/nextflow/nextflow_pipelines/';
-my $nextflow_path = '/bi/home/fkrueger/VersionControl/nextflow_pipelines/';
+my $nextflow_path = '/bi/apps/nextflow/nextflow_pipelines/';
 
 my $which_nf = `which nextflow`;
 if ($which_nf eq ''){
