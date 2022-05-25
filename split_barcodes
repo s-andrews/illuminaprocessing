@@ -422,8 +422,9 @@ sub split_files {
 	    # Update 10 09 2021 
 	    # There were issues with the practice of reversing the sequence first and then taking the substring
 	    # I am going to change the order this is done in (after a conversion with Stephen and Milly)
-	    
+
 	    $barcode2 = substr( $barcode2, 0, $barcode2_length );
+	    
 
             if ($is_next_seq) {
                 # As we're reversing we need to remove the newline from the end
@@ -431,6 +432,8 @@ sub split_files {
                 $barcode2 = reverse($barcode2);
                 $barcode2 =~ tr/GATCgatc/CTAGctag/;
             }
+
+
 
             $barcode .= "_$barcode2";
         }
@@ -574,6 +577,13 @@ sub get_observed_barcodes {
             $_    = <$fh2>;
             $_    = <$fh2>;
 
+
+	    # There was a discrepancy in the code before, but we 
+	    # need to extract the correct bases first, before we 
+	    # do any nextseq specific reverse complementing.
+            $seq2 = substr( $seq2, 0, $prime3_length );
+
+
             # If this is a nextseq run then the second barcode will be
             # reverse complemented from what we'd normally expect so
             # we need to reverse complement it back
@@ -585,7 +595,6 @@ sub get_observed_barcodes {
                 $seq2 =~ tr/GATCgatc/CTAGctag/;
             }
 
-            $seq2 = substr( $seq2, 0, $prime3_length );
             next if ( index( $seq2, 'N' ) >= 0 );
         }
 
