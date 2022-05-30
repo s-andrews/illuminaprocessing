@@ -1,0 +1,24 @@
+#!/usr/bin/bash
+
+mkdir Aligned
+mkdir Aligned/Project_External
+mkdir Aligned/Project_External/Sample_lane1
+mkdir Aligned/Project_External/Sample_lane2
+mkdir Aligned/Project_External/Sample_lane3
+mkdir Aligned/Project_External/Sample_lane4
+mkdir Aligned/Project_External/Sample_lane5
+mkdir Aligned/Project_External/Sample_lane6
+mkdir Aligned/Project_External/Sample_lane7
+mkdir Aligned/Project_External/Sample_lane8
+
+
+mkdir Unaligned
+mkdir Unaligned/Project_External
+mkdir Unaligned/Project_External/Sample_lane1
+mkdir Unaligned/Project_External/Sample_lane2
+mkdir Unaligned/Project_External/Sample_lane3
+mkdir Unaligned/Project_External/Sample_lane4
+mkdir Unaligned/Project_External/Sample_lane5
+mkdir Unaligned/Project_External/Sample_lane6
+mkdir Unaligned/Project_External/Sample_lane7
+mkdir Unaligned/Project_External/Sample_lane8
