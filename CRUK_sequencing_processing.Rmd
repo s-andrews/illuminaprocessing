@@ -1,0 +1,138 @@
+---
+title: "CRUK sequencing processing"
+author: "Laura Biggins"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Processing external sequencing data from CRUK
+
+## Download
+
+We receive an email that looks something like this:
+
+```
+A sequencing run containing your libraries has been published.
+Remember that your data will remain on our FTP server for 30 days. Please make sure you have downloaded it before Friday 5 August.
+
+Run: 220705_A00489_1414_AH7HTTDRX2 lanes 1, 2
+
+SLX-22121
+Projects:
+BABRAHAMsequencing
+Samples:
+WT1lv (BABRAHAMsequencing)
+WT2lv (BABRAHAMsequencing)
+WT3lv (BABRAHAMsequencing)
+WT4lv (BABRAHAMsequencing)
+WT5lv (BABRAHAMsequencing)
+Mut1lv (BABRAHAMsequencing)
+Mut2lv (BABRAHAMsequencing)
+```
+
+Create a run folder in `/bi/scratch/run_processing/`
+e.g. `mkdir 220705_CRUK_external`
+
+Go into that folder and download the data by adapting the following command (change the SLX number):
+
+```
+nohup wget --user=babraham_kokkogonzales --password=noisyrhino61 ftp1.cruk.cam.ac.uk:SLX-22121* &
+```
+
+## Create flowcell on Sierra and set up folder structure
+
+### Create flowcell
+
+Select the New flowcell option in Sierra menu.  
+Use the run folder name you created in /bi/scratch/run_processing/ as the Serial Number.  
+Select samples, Create Flowcell
+
+## Create folder structure on pipeline server
+
+```
+ssh SBSUser@pipeline1
+cd /primary/
+mkdir 22xxxx_CRUK_external
+cd 22xxxx_CRUK_external/
+~/illuminaprocessing/create_external_run_folder_structure.sh
+```
+This is now ready for files to be copied to using copy_back_files, but we don't want to do that before renaming them.
+
+
+# Rename files
+
+Cellranger is very fussy about filenames, so we need to get rid of certain characters `. -`, and capitalise s, r, i etc.
+Even if we're not running cellranger, we still want to add the sample names and lane number to the fastq files.
+
+The rename_CRUK_samples.sh script takes the contents.csv file from CRUK and uses that to rename fq files.
+
+We go from something like this
+```
+SLX-22125.NEBNext16.H7HTTDRX2.s_2.r_1.fq.gz
+```
+to: 
+```
+SLX22125_NEBNext16_Mut2k_S2_L002_R1.fastq.gz
+```
+or for using with cellranger:
+```
+SLX22125_NEBNext16_Mut2k_S2_L002_R1_001.fastq.gz
+```
+
+It needs updating for the _001 to be an option - we don't want to add that if we're not using cellranger, or bismark (maybe others but not sure) do not recognise paired end files, they expect xxxx_R1.fastq.gz and xxxx_R2.fastq.gz.
+
+```
+~/scripts/rename_CRUK_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
+~/scripts/rename_CRUK_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
+```
+
+
+# Tidy the extra files
+
+```
+mkdir raw_data
+mv *lostreads* raw_data/
+mv *bcl2fastq.zip raw_data/
+mv *md5sums.txt raw_data/
+
+nohup tar -zcvf raw_data_L001_.tar.gz raw_data &
+```
+
+For bulk RNA-seq, bisulfite etc, the standard nextflow pipelines can be used, then copy_back_files to copy them to the pipeline server (Sierra).
+
+For cellranger/cellranger-arc, there are more things to add here, there are scripts for creating libraries files etc.
+
+
+
+
+# Extracting reads from lostreads files
+
+This does not need to be done for most runs, only if something has gone wrong with the demultiplexing e.g. incorrect barcodes supplied, or no barcodes supplied.
+
+The CRUK demultiplexing script is described here: https://genomicsequencing.cruk.cam.ac.uk/submission/help/demultiplexing.jsp
+
+This is an example of a run where none of the samples had been split.   
+https://www.bioinformatics.babraham.ac.uk/cgi-bin/helpdeskuser.cgi?action=show_job&public_id=unifyblink
+
+This is another example where one of the barcodes had been mislabelled, so we needed to extract one barcode from the lostreads fastq file.    
+https://www.bioinformatics.babraham.ac.uk/cgi-bin/helpdeskuser.cgi?action=show_job&public_id=beeprose
+
+Example of demultiplexing command:   
+```
+ssub -o zzlog_SLX22121.txt --email --mem 10G --cores 8 ~/demultiplexer.rhel/demuxFQ -b SLX22121_NoCode_L001_R1.fastq -c -d -i -e -t 0 -s SLX22121_demux_report_R1.txt demux_SLX22121.txt SLX-22121.H7HTTDRX2.s_1.r_1.lostreads.fq.gz
+ssub -o zzlog_SLX22125.txt --email --mem 10G --cores 8 ~/demultiplexer.rhel/demuxFQ -b SLX22125_NoCode_L001_R1.fastq -c -d -i -e -t 0 -s SLX22125_demux_report_R1.txt demux_SLX22125.txt SLX-22125.H7HTTDRX2.s_2.r_1.lostreads.fq.gz
+```
+
+
+
+
+
+
+
+
+
+
