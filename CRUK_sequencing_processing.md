@@ -33,6 +33,26 @@ Go into that folder and download the data by adapting the following
 command (change the SLX number):
 
     nohup wget --user=babraham_kokkogonzales --password=noisyrhino61 ftp1.cruk.cam.ac.uk:SLX-22121* &
+    
+### Downloading data that hasn't gone through the BI sequencing facility   
+
+Occasionally requests come in from people via email who have used a different account at CRUK. They should provide the ftp details including the user name and password, and the data can be downloaded similarly to the command above.   
+If the samples have gone through the BI sequencing facility they should be in the queue on Sierra, and a flowcell can be created, as described [below](#create-flowcell).   
+If the samples are not on Sierra, then they will have to be added before a flowcell can be created.
+
+#### Creating and receiving a sample in Sierra
+
+**_Only do this if the sample does not already exist!_**   
+   
+In Sierra:
+
+    Create sample
+    Show Queue
+    Receive sample
+    Pass Individual QC
+    Pass final QC
+
+Then a flowcell can be created.
 
 ## Create flowcell on Sierra and set up folder structure
 
@@ -52,7 +72,7 @@ Select samples, Create Flowcell
     ~/illuminaprocessing/create_external_run_folder_structure.sh
 
 This is now ready for files to be copied to using copy_back_files, but
-we don’t want to do that before renaming them.
+first we want to rename them.
 
 # Rename files
 
@@ -81,8 +101,8 @@ that if we’re not using cellranger, or bismark (maybe others but not
 sure) do not recognise paired end files, they expect xxxx_R1.fastq.gz
 and xxxx_R2.fastq.gz.
 
-    ~/scripts/rename_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
-    ~/scripts/rename_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
+    ~/illuminaprocessing/rename_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
+    ~/illuminaprocessing/rename_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
 
 # Tidy the extra files
 
