@@ -101,8 +101,8 @@ that if we’re not using cellranger, or bismark (maybe others but not
 sure) do not recognise paired end files, they expect xxxx_R1.fastq.gz
 and xxxx_R2.fastq.gz.
 
-    ~/illuminaprocessing/rename_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
-    ~/illuminaprocessing/rename_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
+    ~/illuminaprocessing/rename_CRUK_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
+    ~/illuminaprocessing/rename_CRUK_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
 
 # Tidy the extra files
 
