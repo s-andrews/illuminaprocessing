@@ -27,7 +27,7 @@ e.g. `mkdir 220705_CRUK_external`
 Go into that folder and download the data by adapting the following
 command (change the SLX number):
 
-    nohup wget --user=babraham_kokkogonzales --password=noisyrhino61 ftp1.cruk.cam.ac.uk:SLX-22121* &
+    nohup wget --user=[] --password=[] ftp1.cruk.cam.ac.uk:SLX-22121* &
     
 ### Downloading data that hasn't gone through the BI sequencing facility   
 
