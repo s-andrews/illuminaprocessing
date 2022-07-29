@@ -63,7 +63,7 @@ Use the run folder name you created in /bi/scratch/run_processing/ as
 the Serial Number.  
 Select samples, Create Flowcell
 
-## Create folder structure on pipeline server
+### Create folder structure on pipeline server
 
     ssh SBSUser@pipeline1
     cd /primary/
@@ -96,8 +96,8 @@ or for using with cellranger:
 
     SLX22125_NEBNext16_Mut2k_S2_L002_R1_001.fastq.gz
 
-It needs updating for the \_001 to be an option - we don’t want to add
-that if we’re not using cellranger, or bismark (maybe others but not
+The script needs updating for the \_001 to be an option - we don’t want to add
+that if we’re not using cellranger, as bismark (maybe others but not
 sure) do not recognise paired end files, they expect xxxx_R1.fastq.gz
 and xxxx_R2.fastq.gz.
 
@@ -113,17 +113,78 @@ and xxxx_R2.fastq.gz.
 
     nohup tar -zcvf raw_data_L001_.tar.gz raw_data &
 
+# Running standard pipelines
+
 For bulk RNA-seq, bisulfite etc, the standard nextflow pipelines can be
 used, then copy_back_files to copy them to the pipeline server (Sierra).
 
-For cellranger/cellranger-arc, there are more things to add here, there
-are scripts for creating libraries files etc.
+# Processing 10x multiome data  
+
+If the libraries have been prepared using the 10x multiome protocol for scRNA and scATAC-seq, there will be one set of gene expression fastq files and one set of ATACseq fastq files. These need to be processed together with cellranger-arc.
+
+## Creating library files  
+
+One of the arguments passed to cellranger-arc is a library file which contains the location of the data for each sample. This will comprise a header line and then 2 further lines specifying the data locations. For example:
+
+    fastqs,sample,library_type
+    /bi/scratch/run_processing/220620_CRUK_external/SLX22124,SLX22124_SITTC1_AME_E,Gene Expression
+    /bi/scratch/run_processing/220620_CRUK_external/SLX22107,SLX22107_SINAC1_AME_E,Chromatin Accessibility
+
+One library file per sample is required. If there are only a couple of samples, these can be created manually. For more samples, a script can be used - this needs a bit of polishing before adding to this repo, so I'll just put the code here for now:
+
+    #!/bin/bash
+    #usage:  ./create_libraries.sh rna_sample_sheet atac_sample_sheet
+    RNA=$1
+    ATAC=$2
+    while read -r LINE; do
+        LINEARRAY=(${LINE//,/ })
+        SLX=${LINEARRAY[0]}
+            SLX2=$(echo $SLX | tr -d -)
+        BARCODE=${LINEARRAY[1]}
+        NAME=${LINEARRAY[3]}
+        OUTFILE=libraries_${NAME}.csv
+        echo "fastqs,sample,library_type" > $OUTFILE
+        echo "/bi/scratch/run_processing/220725_CRUK_external/RNA,${SLX2}_${BARCODE}_${NAME},Gene Expression" >> $OUTFILE
+    done < $RNA
+
+    while read -r LINE; do
+        LINEARRAY=(${LINE//,/ })
+        SLX=${LINEARRAY[0]}
+        SLX2=$(echo $SLX | tr -d -)
+        BARCODE=${LINEARRAY[1]}
+        NAME=${LINEARRAY[3]}
+        OUTFILE=libraries_${NAME}.csv
+        echo "/bi/scratch/run_processing/220725_CRUK_external/ATAC,${SLX2}_${BARCODE}_${NAME},Chromatin Accessibility" >> $OUTFILE
+    done < $ATAC
+
+## Running cellranger-arc
+
+This is an example cellranger-arc command for human multiome data:
+
+    ssub --mem 36G --cores 32 -o libraries_AME_E.log -j ArcRanger9 --email /bi/apps/cellranger-arc/cellranger-arc-2.0.0/bin/cellranger-arc count --id=libraries_AME_E --reference=/bi/apps/cellranger-arc/references/refdata-cellranger-arc-GRCh38-2020-A-2.0.0 --libraries=libraries_AME_E.csv --localcores=32 --localmem=32
+    
+### Creating cellranger-arc commands
+
+If there are many samples, a bash command similar to this can be useful for creating a set of commands - it will write these to a file so that they can be checked before submission.
+
+    for i in libraries*csv; do ID=$(sed 's/.csv//' <<< $i); echo "ssub --mem 36G --cores 32 -o ${ID}.log -j ArcRanger9 --email /bi/apps/cellranger-arc/cellranger-arc-2.0.0/bin/cellranger-arc count --id=${ID} --reference=/bi/apps/cellranger-arc/references/refdata-cellranger-arc-GRCh38-2020-A-2.0.0 --libraries=${i} --localcores=32 --localmem=32" >> cellranger_arc_commands.sh; done
+    
+## Renaming output files for copying over to Sierra
+
+cellranger-arc will write output files to the folder specified in the --id argument. A script can be used to transform the output filenames into Sierra/copy-back_files compatible names.
+
+    /bi/scratch/scripts/prepare_10X_folder_for_copy_back_multiome.pl [output_folder_name] [L00x]
+    
+The copy_back_files script can then be run to copy the files across to Sierra
+
+    module load copy_back_files
+    copy_back_files [run_folder_name] *
 
 # Extracting reads from lostreads files
 
-This does not need to be done for most runs, only if something has gone
-wrong with the demultiplexing e.g. incorrect barcodes supplied, or no
-barcodes supplied.
+This does not need to be done for most runs, though if something has gone
+wrong with the demultiplexing e.g. incorrect barcodes were supplied, or no
+barcodes were supplied, then we can use the CRUK demultiplexing scripts to extract sequences from the lostreads files.
 
 The CRUK demultiplexing script is described here:
 <https://genomicsequencing.cruk.cam.ac.uk/submission/help/demultiplexing.jsp>
