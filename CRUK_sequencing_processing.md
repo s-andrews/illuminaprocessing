@@ -1,8 +1,3 @@
-CRUK sequencing processing
-================
-Laura Biggins
-2022-07-07
-
 # Processing external sequencing data from CRUK
 
 ## Download
