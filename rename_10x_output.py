@@ -68,7 +68,7 @@ def process_folder(folder):
 
     # We then put the whole of the directory into a tar file. It's quicker to
     # do this as an external command
-    tar_file = base_name + ".tar"
+    tar_file = base_name + lane+"cellranger.tar"
     print(f"Putting all 10x output into  {tar_file}", file=sys.stderr)
     tar_command = f"tar -cf {tar_file} {folder.name}"
     subprocess.run(tar_command, check=True, shell=True, cwd=folder.parent)
