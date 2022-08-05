@@ -166,6 +166,10 @@ If there are many samples, a bash command similar to this can be useful for crea
     
 ## Renaming output files for copying over to Sierra
 
+### Normal cellranger count
+For standard 10X runs you'll get a folder for each sample.  Inside there will be a folder called ```outs``` and in there will be all of the actual output.  We want to extract and rename some files from there to see directly on sierra, and we want to tar up the whole lot for a more complete record.  To do this we have a script called ```rename_10X_output.py``` which will take care of this.  You just need to pass it the base run folder in which the processing was done and it will process all of the cellranger output in there.
+
+### cellranger-arc
 cellranger-arc will write output files to the folder specified in the --id argument. A script can be used to transform the output filenames into Sierra/copy-back_files compatible names.
 
     /bi/scratch/scripts/prepare_10X_folder_for_copy_back_multiome.pl [output_folder_name] [L00x]
