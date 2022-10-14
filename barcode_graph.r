@@ -4,7 +4,7 @@ library(RColorBrewer)
 
 infile <- commandArgs(trailingOnly = TRUE)[1]
 outfile <- commandArgs(trailingOnly = TRUE)[2]
-read.delim(infile,stringsAsFactors=FALSE) -> data
+read.delim(infile,stringsAsFactors=FALSE,colClasses=c("Code"="character","Freq"="numeric","Name"="character")) -> data
 
 data[order(data$Freq),] -> data
 
