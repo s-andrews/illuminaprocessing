@@ -67,37 +67,7 @@ Select samples, Create Flowcell
     ~/illuminaprocessing/create_external_run_folder_structure.sh
 
 This is now ready for files to be copied to using copy_back_files, but
-first we want to rename them.
-
-# Rename files
-
-Cellranger is very fussy about filenames, so we need to get rid of
-certain characters `. -`, and capitalise s, r, i etc. Even if we’re not
-running cellranger, we still want to add the sample names and lane
-number to the fastq files.
-
-The rename_samples.sh script takes the contents.csv file from CRUK and
-uses that to rename fq files.
-
-We go from something like this
-
-    SLX-22125.NEBNext16.H7HTTDRX2.s_2.r_1.fq.gz
-
-to:
-
-    SLX22125_NEBNext16_Mut2k_S2_L002_R1.fastq.gz
-
-or for using with cellranger:
-
-    SLX22125_NEBNext16_Mut2k_S2_L002_R1_001.fastq.gz
-
-The script needs updating for the \_001 to be an option - we don’t want to add
-that if we’re not using cellranger, as bismark (maybe others but not
-sure) do not recognise paired end files, they expect xxxx_R1.fastq.gz
-and xxxx_R2.fastq.gz.
-
-    ~/illuminaprocessing/rename_CRUK_samples.sh SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
-    ~/illuminaprocessing/rename_CRUK_samples.sh SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
+first we want to tidy and rename them.
 
 # Tidy the extra files
 
@@ -108,10 +78,59 @@ and xxxx_R2.fastq.gz.
 
     nohup tar -zcvf raw_data_L001_.tar.gz raw_data &
 
+# Rename files
+
+Cellranger is very fussy about filenames, so we need to get rid of
+certain characters `. -`, and capitalise s, r, i etc. Even if we’re not
+running cellranger, we still want to add the sample names and lane
+number to the fastq files.
+
+The rename_CRUK_samples.sh script takes the contents.csv file from CRUK and
+uses that to rename fq files.
+
+We go from something like this
+
+    SLX-22125.NEBNext16.H7HTTDRX2.s_2.r_1.fq.gz
+
+to:
+
+    SLX22125_NEBNext16_Mut2k_S2_L002_R1.fastq.gz
+
+or for using with cellranger - specify the -c option when running the script:
+
+    SLX22125_NEBNext16_Mut2k_S2_L002_R1_001.fastq.gz
+
+Usage: 
+
+    rename_CRUK_samples.sh [options: -h|-c(cellranger mode)] [contents file] [lane no] [extra text to remove (optional)]
+
+e.g.
+
+    ~/illuminaprocessing/rename_CRUK_samples.sh -c SLX-22121.H7HTTDRX2.s_1.contents.csv 1 H7HTTDRX2
+    ~/illuminaprocessing/rename_CRUK_samples.sh -c SLX-22125.H7HTTDRX2.s_2.contents.csv 2 H7HTTDRX2
+
+If not using cellranger don't include -c as bismark (and others) won't recognise them as paired end files, they expect xxxx_R1.fastq.gz
+and xxxx_R2.fastq.gz.
+
 # Running standard pipelines
 
 For bulk RNA-seq, bisulfite etc, the standard nextflow pipelines can be
 used, then copy_back_files to copy them to the pipeline server (Sierra).
+
+# Running Cell Ranger count 
+
+Once files have been renamed appropriately, cellranger count can be run to process 10x RNA-seq data (for RNA and ATAC multiome data see [next section](#processing-10x-multiome-data). There is a nextflow pipeline for cellranger count but it may not be functional, so at the moment we're running it directly as jobs on the cluster  
+    module load cellranger
+    module load ssub
+
+The string to pass to --id is the first part of the fastq filename (preceding something similar to `_S1_L001_R1_001.fastq.gz`)
+
+Example commands for running cellranger count:
+
+    ssub -o cellranger.log --email -j cellranger -c 16 -m 40G cellranger count --id=SLX22547_SITTH7_ESC_day10_2B --sample=SLX22547_SITTH7_ESC_day10_2B --transcriptome=/bi/apps/cellranger/references/refdata-gex-mm10-2020-A --fastqs=/bi/scratch/run_processing/221208_SLX22547_CRUK_external/day10
+    
+    for i in {x,y,z}; do ssub -o cellranger.log --email -j cellranger -c 16 -m 40G cellranger count --id=${i} --sample=${i} --transcriptome=/bi/apps/cellranger/references/refdata-gex-GRCh38-2020-A --fastqs=/bi/scratch/run_processing/xxxx; done
+
 
 # Processing 10x multiome data  
 
