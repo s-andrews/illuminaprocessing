@@ -21,9 +21,9 @@ def check_folder (folder):
 
     try:
         local_files = get_local_files(folder)
-    except FileNotFoundError:
+    except Exception as ex:
         complete = False
-        message = "Local folder not found"
+        message = str(ex)
         local_files = None
         local_size = 0
 
@@ -51,7 +51,6 @@ def check_folder (folder):
                 break
 
             total_size += local_files[file]
-
     
     if complete:
         print("\t".join([folder,"COMPLETE",f"{len(local_files.keys())} files {round(total_size/(1024**3))}GB"]))
@@ -64,9 +63,9 @@ def get_local_files(folder):
     path = Path("/bi/scratch/run_processing/") /folder
 
     if not (path.exists() and path.is_dir()):
-        raise FileNotFoundError()
+        raise FileNotFoundError("Local folder not found")
 
-    files = path.glob("*_L00*")
+    files = path.rglob("*_L00*")
 
     files_to_return = {}
 
@@ -76,6 +75,9 @@ def get_local_files(folder):
 
         if file.is_dir():
             continue
+
+        if file.name in files_to_return and file.resolve().stat().st_size != files_to_return[file.name]:
+            raise Exception(f"Local duplicate size mismatch {file.name}")
 
         files_to_return[file.name] = file.resolve().stat().st_size
 
