@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+import sys
+
+def main():
+    folders = sys.argv[1:]
+
+    if not folders:
+        print("Usage is check_copying_complete folder1, folder2, ...")
+
+
+    for folder in folders:
+        check_folder(folder)
+
+
+def check_folder (folder):
+    # Get the list of files in the folder
+    complete = True
+    message = ""
+
+    try:
+        local_files = get_local_files(folder)
+    except FileNotFoundError:
+        complete = False
+        message = "Local folder not found"
+        local_files = None
+        local_size = 0
+
+
+    try:
+        remote_files = get_remote_files(folder)
+    except FileNotFoundError:
+        complete = False
+        message = "Remote folder not found"
+        remote_files = None
+
+
+    total_size = 0
+
+    if local_files and remote_files:
+        for file in local_files:
+            if not file in remote_files:
+                complete = False
+                message = f"{file} missing from remote"
+                break
+
+            if not local_files[file] == remote_files[file]:
+                complete = False
+                message = f"{file} size mismatch local={local_files[file]} remote={remote_files[file]}"
+                break
+
+            total_size += local_files[file]
+
+    
+    if complete:
+        print("\t".join([folder,"COMPLETE",f"{len(local_files.keys())} files {round(total_size/(1024**3))}GB"]))
+    else:
+        print("\t".join([folder,"ERROR",message]))
+
+
+
+def get_local_files(folder):
+    path = Path("/bi/scratch/run_processing/") /folder
+
+    if not (path.exists() and path.is_dir()):
+        raise FileNotFoundError()
+
+    files = path.glob("*_L00*")
+
+    files_to_return = {}
+
+    for file in files:
+        if "work/" in str(file):
+            continue
+
+        if file.is_dir():
+            continue
+
+        files_to_return[file.name] = file.resolve().stat().st_size
+
+    return files_to_return
+
+def get_remote_files(folder):
+
+    path = Path("/bi/seqfac/seqfac/") /folder
+
+    if not (path.exists() and path.is_dir()):
+        raise FileNotFoundError()
+    
+    files = path.rglob("*_L00*")
+
+    files_to_return = {}
+
+    for file in files:
+        files_to_return[file.name] = file.stat().st_size
+
+    return files_to_return
+
+
+
+
+
+
+
+
+
+
+
+
+
+main()
