@@ -7,12 +7,10 @@ The first step in processing an AVITI run is to run `bases2fastq`. This has been
 ### Create fastq files
 
 ``` bash
-nohup  ~/bases2fastq --legacy-fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv [run_folder] [output_folder]
+nohup  ~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv [run_folder] [output_folder]
 ```
 
 This uses a custom run manifest that creates index fastq files and does not demultiplex.
-
-`--legacy-fastq` seemed to put half the data in L001 and half in L002. I've only run it with that option once. Without that option all R1 went into 1 file. As we need to rename files anyway we might not want to use that option.
 
 ### Copy data to /primary and demultiplex
 
@@ -24,8 +22,7 @@ cd [run_folder]
 
 nohup cp /data/[output_folder]/Samples/DefaultProject/DefaultSample/*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy.log &
 
-rename DefaultSample_S1 lane1_NoIndex Unaligned/Project_External/Sample_lane1/*fastq.gz
-rename _001.fastq.gz .fastq.gz Unaligned/Project_External/Sample_lane1/*fastq.gz
+rename DefaultSample lane1_NoIndex_L001 Unaligned/Project_External/Sample_lane1/*fastq.gz
 
 nohup ~/illuminaprocessing/split_barcodes_aviti_dual_index [run_folder] > barcode_splitting.log &
 ```
@@ -41,10 +38,9 @@ This seems to have worked ok - it's sample 6041, lane 8639 in Sierra.
 ## bases2fastq
 
 ``` bash
-nohup  ~/bases2fastq --legacy-fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned
+nohup  ~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned
 ```
 
-As mentioned above, I'm not sure that we want the `--legacy-fastq` option, but we do need the `--run-manifest` option.\
 More details of the run manifest are in the later section [Custom run manifest]
 
 ## Demultiplexing
@@ -88,8 +84,7 @@ lane1_NoIndex_L001_I1.fastq.gz\
 lane1_NoIndex_L001_I2.fastq.gz
 
 ``` bash
-rename DefaultSample_S1 lane1_NoIndex Unaligned/Project_External/Sample_lane1/*fastq.gz
-rename _001.fastq.gz .fastq.gz Unaligned/Project_External/Sample_lane1/*fastq.gz
+rename DefaultSample lane1_NoIndex_L001 Unaligned/Project_External/Sample_lane1/*fastq.gz
 ```
 
 Demultiplex using the slightly modified version of the split_barcodes script.
