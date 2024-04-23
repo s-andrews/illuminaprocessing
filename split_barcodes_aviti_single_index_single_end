@@ -220,6 +220,7 @@ sub split_files {
     }
 
 
+
     # We may have multiple barcodes with the same designation if we have
     # multi barcoded libraries.  We'll name the files after the first barcode
     # in the set, but we'll add references to the same filehandles for the other
