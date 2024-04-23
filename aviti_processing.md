@@ -152,25 +152,28 @@ The /data/AV240405 folder has all the AVITI runs in so far
 Example command for processing the test run from the AV240405 folder:
 
 ``` bash
-nohup  ~/bases2fastq --legacy-fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned
+nohup  ~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned
 ```
 
-The run folder and output directory will need to be changed each time, but the first part of the command can remain the same (up to `.csv`) - unless we need to change the run manifest.
+The run folder and output directory will need to be changed each time, but the first part of the command can remain the same (up to `.csv`) - unless we need to change the run manifest.   
+
+I did try using the `--legacy-fastq` option which produced filenames in the format of `DefaultSample_S1_L001_I1_001.fastq.gz`, but it put half in L001 and half in L002. Without that option all R1 went into 1 file. We need to rename the files anyway so it was simpler to have output filenames as DefaultSample_I1.fastq.gz and use a simple rename command to convert to lane1_NoIndex_L001_I1.fastq.gz.
+
 
 ### Output files
 
 fastq files located in `/data/AV240405/[bases2fastq_output_dir]/Samples/DefaultProject/DefaultSample/`
 
---legacy-fastq put half in L001 and half in L002. Without that option all R1 went into 1 file.
-
 ```         
-DefaultSample_S1_L001_I1_001.fastq.gz
-DefaultSample_S1_L001_I2_001.fastq.gz
-DefaultSample_S1_L001_R1_001.fastq.gz
-DefaultSample_S1_L001_R2_001.fastq.gz
+DefaultSample_I1.fastq.gz
+DefaultSample_I2.fastq.gz
+DefaultSample_R1.fastq.gz
+DefaultSample_R2.fastq.gz
 ```
 
-The initial test run was PhiX with 4 multiplexed samples.
+``` bash
+rename DefaultSample lane1_NoIndex_L001 *fastq.gz
+```
 
 #### Note - SpikeInAsUnassigned setting
 
