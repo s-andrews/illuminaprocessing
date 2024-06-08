@@ -48,6 +48,8 @@ def main():
     # create the directory structure in the current working directory
     run_dict = read_run_info(info_file,dual_barcode)
 
+    #print(run_dict)
+    
     # create links to fastq files within the appropriate sub-directories 
     make_multi_run_structure(run_dict,working_dir,seqfac_path)
 
@@ -60,8 +62,8 @@ def make_multi_run_structure(run_dict, working_dir,seqfac_path):
 
 def make_links(seqfac_path, dest_dir, run_type,barcodes):
     
-    #the barcodes to search for
-    patterns = [re.compile(barcode) for barcode in barcodes]
+    #the barcodes to search for (ignore the first value of the list as this is the run_info for the filename)
+    patterns = [re.compile(barcode) for barcode in barcodes[1:]]
 
     # for the fastq files in the seqfac run folder look for a barcode match and create link in subdirectory
     for root,dirs,files in os.walk(seqfac_path):
@@ -69,10 +71,11 @@ def make_links(seqfac_path, dest_dir, run_type,barcodes):
             if not file.endswith(".fastq.gz"):
                 continue
             file_path = os.path.join(root, file)
-
+            
             if any(pattern.search(file) for pattern in patterns):
                 ending = r"(_L\d{3}_R\d\.fastq\.gz)$"
-                link_name = re.sub(ending, f"_{run_type}\\1", file)
+                # create the link name from the first entry in barcodes which is the reduced run_info
+                link_name = re.sub(ending, f"_{barcodes[0]}\\1", file)
                 link_path = os.path.join(dest_dir, run_type,link_name)
                 if not os.path.exists(link_path):
                     os.symlink(file_path, link_path)
@@ -100,15 +103,19 @@ def read_run_info(file,dual_barcode):
             # check if the barcode is dual indexed if so join these together
             if dual_barcode:
                 run_info = '_'.join(line[2:])
+                # create a shorter version of the info, to help with file issues (not tested)
+                run_info_filename = ''.join(line[2:3] + line[4:])
                 barcode = '_'.join(line[:2])
             else:
                 run_info = '_'.join(line[1:])
+                # create a shorter version of the info, to help with file issues
+                run_info_filename = '_'.join(line[1:2] + line[3:])
                 barcode = line[0]
 
             if run_info in run_dict:
                 run_dict[run_info].append(barcode)
             else:
-                run_dict[run_info] = [barcode]
+                run_dict[run_info] = [run_info_filename, barcode]
 
     return(run_dict)
 
