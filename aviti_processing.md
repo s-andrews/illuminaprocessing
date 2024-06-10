@@ -20,7 +20,7 @@ mkdir [run_folder]
 cd [run_folder]
 ~/illuminaprocessing/create_external_run_folder_structure_1_lane.sh
 
-nohup cp /data/[output_folder]/Samples/DefaultProject/DefaultSample/*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy.log &
+nohup cp /data/AV240405/[output_folder]/Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy.log &
 
 rename DefaultSample lane1_NoIndex_L001 Unaligned/Project_External/Sample_lane1/*fastq.gz
 
