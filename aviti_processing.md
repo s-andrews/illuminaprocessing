@@ -23,7 +23,16 @@ cd [run_folder]
 nohup cp /data/AV240405/[output_folder]/Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy.log &
 
 rename DefaultSample lane1_NoIndex_L001 Unaligned/Project_External/Sample_lane1/*fastq.gz
+```
 
+Quick one-liner to get the most frequent barcodes for a check before running the demultiplexing
+
+```
+zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n 10
+```
+
+Run the demultiplexing
+```
 nohup ~/illuminaprocessing/split_barcodes_aviti_dual_index [run_folder] > barcode_splitting.log &
 ```
 
