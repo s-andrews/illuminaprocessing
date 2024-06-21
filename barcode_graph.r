@@ -36,7 +36,7 @@ if ((length(all.names) != length(unique(all.names))) & length(unique(all.names))
 }
 
 
-png(filename = outfile,width = 600,height=100+(50*nrow(data)))
+png(filename = outfile,width = 600,height=100+(50*nrow(data)), type="cairo")
 
 #data$Name[1] <- "This is a longer name than before"
 
