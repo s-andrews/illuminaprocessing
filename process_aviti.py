@@ -5,7 +5,7 @@ import mysql.connector
 
 # currently needs to be run from /data/AV240405
 # we might move to running it from /data when we make it compatible with MiSeq as well.
-# nohup ~/illuminaprocessing/process_aviti_initial.py [run_folder] > xx.log &
+# nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
 
 def main():
 
@@ -56,7 +56,7 @@ def run_bases2fastq(run_folder):
             print(f"\n !! Couldn't find run folder {run_folder}. Valid run folder required !! \n    Exiting...\n")
             exit()
 
-        bases2fastq_cmd = f"~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv {run_folder} {run_folder}/Unaligned"
+        bases2fastq_cmd = f"bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv {run_folder} {run_folder}/Unaligned"
         print(bases2fastq_cmd)
         subprocess.run(bases2fastq_cmd, shell=True, executable="/bin/bash")
         
