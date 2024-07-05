@@ -1,18 +1,56 @@
 # AVITI processing
 
-# Quick summary of processing commands
+## bases2fastq and copying to /primary
 
-The first step in processing an AVITI run is to run `bases2fastq`. This has been updated (04/04/2024) to the latest version (v1.7).
+The script `process_aviti.py` is the first step in processing the completed AVITI runs.
+It needs to be run from /data/AV240405 on pipeline2.
 
-### Create fastq files
+``` bash
+nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
+```
+
+This runs bases2fastq, creates a directory structure on /primary and copies the fastq files from /data to /primary.   
+It also checks the first 100,000 index reads and writes out the most frequently occurring to a text file. This is so that a manual check can be carried out to see if the barcodes look right before running the demultiplexing.
+
+## Demultiplexing
+
+As detailed further down, the existing demultiplexing script needed some modifications to work with the AVITI data. There are currently 3 separate aviti splitting scripts to choose from - we should write a simple wrapper around these.   
+For now, we've got:    
+- `split_barcodes_aviti_dual_index` - for dual index, paired end
+- `split_barcodes_aviti_single_index` - for single index, paired end
+- `split_barcodes_aviti_single_index_single_end` - for single index, single end
+
+As with the previous version of the split_barcodes script, these need to be run from /primary/[run_folder]
+
+```
+nohup ~/illuminaprocessing/split_barcodes_aviti_dual_index [run_folder] > barcode_splitting.log &
+```
+
+FastQC and multiqc can be run on the pipeline server.
+Any further processing can be carried out on the capstone cluster.
+
+More details of the initial processing steps can be found in the sections below - this information shouldn't be required unless changes need to be made to the processing script.
+
+------------------------------------------------------------------------------
+
+# Breakdown of processing commands
+
+The first step in processing an AVITI run is to run `bases2fastq`.
+
+## Create fastq files
 
 ``` bash
 nohup  ~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv [run_folder] [output_folder]
 ```
 
-This uses a custom run manifest that creates index fastq files and does not demultiplex.
+This uses a custom run manifest that creates index fastq files and does not demultiplex. More details of the run manifest are in the later section [Custom run manifest] (#custom-run-manifest)
 
-### Copy data to /primary and demultiplex
+
+## Copy data to /primary
+
+Create directory structure on /primary and copy fastqs over.
+
+When copying an initial run over, I did try using the run folder name (20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024) but Sierra rejected it as too long. Genomics have been creating the run_folder names which seems to be working fine.
 
 ``` bash
 cd /primary
@@ -21,36 +59,19 @@ cd [run_folder]
 ~/illuminaprocessing/create_external_run_folder_structure_1_lane.sh
 
 nohup cp /data/AV240405/[output_folder]/Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy.log &
+```
 
+Files need to be renamed so that Sierra and the demultiplexing script can find them.
+
+```
 rename DefaultSample lane1_NoIndex_L001 Unaligned/Project_External/Sample_lane1/*fastq.gz
 ```
 
 Quick one-liner to get the most frequent barcodes for a check before running the demultiplexing
 
 ```
-zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n 10
+zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n 10
 ```
-
-Run the demultiplexing
-```
-nohup ~/illuminaprocessing/split_barcodes_aviti_dual_index [run_folder] > barcode_splitting.log &
-```
-
-------------------------------------------------------------------------
-
-# Breakdown of processing steps
-
-Code blocks here are the commands that were used to process the first test run.
-
-This seems to have worked ok - it's sample 6041, lane 8639 in Sierra.
-
-## bases2fastq
-
-``` bash
-nohup  ~/bases2fastq -p 16 --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024 20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned
-```
-
-More details of the run manifest are in the later section [Custom run manifest]
 
 ## Demultiplexing
 
@@ -63,21 +84,9 @@ The `split_barcodes` script, in its existing format, does not work with the AVIT
 -   If we run `create_external_run_folder_structure.sh`, it creates 8 lanes, and so split_barcodes then looks for 8 lanes of data.
 
 For now, I've hardcoded some options in to the script `split_barcodes_aviti_dual_index` so that it expects R1, R2, I1, I2 files.\
-There is also an accompanying script `split_barcodes_aviti_single_index` that doesn't expect I2, but this hasn't been tested.
+There is also an accompanying script `split_barcodes_aviti_single_index` that doesn't expect I2.
 
 There is also a very simple script `create_external_run_folder_structure_1_lane.sh` to just create one lane.
-
-Copying the test run over to /primary\
-I did try using the run folder name (20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024) but Sierra rejected it as too long.
-
-``` bash
-cd /primary
-mkdir 20240306_AV240405_InstallPV-SideA
-cd 20240306_AV240405_InstallPV-SideA
-~/illuminaprocessing/create_external_run_folder_structure_1_lane.sh
-
-nohup cp /data/AV240405/20240306_AV240405_InstallPV-SideA-AV240405-06Mar2024/Unaligned_v1.7/Samples/DefaultProject/DefaultSample/DefaultSample*L001*fastq.gz Unaligned/Project_External/Sample_lane1/ > copy_L1.log &
-```
 
 In the `split_barcodes` script, the files are found using this line of perl code:
 
