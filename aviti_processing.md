@@ -17,6 +17,7 @@ It also checks the first 100,000 index reads and writes out the most frequently 
 As detailed further down, the existing demultiplexing script needed some modifications to work with the AVITI data. There are currently 3 separate aviti splitting scripts to choose from - we should write a simple wrapper around these.   
 For now, we've got:    
 - `split_barcodes_aviti_dual_index` - for dual index, paired end
+- `split_barcodes_aviti_dual_index_single_end` - for dual index, single end
 - `split_barcodes_aviti_single_index` - for single index, paired end
 - `split_barcodes_aviti_single_index_single_end` - for single index, single end
 
