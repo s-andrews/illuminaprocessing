@@ -4,6 +4,7 @@ import os
 import re 
 import sys
 import argparse
+import csv
 
 # Script to help organise the processing of run folders with multiple sequencing types within them
     # First argument is the run folder name
@@ -90,15 +91,14 @@ def read_run_info(file,dual_barcode):
     
     run_dict = {}
     
-    with open(file, "r") as input_file:
-        for count, line in enumerate(input_file):
 
-            if count == 0:
-                continue
-                
-            line = line.strip()
-            line = line.rstrip(",")
-            line = line.split(",")
+    with open(file, mode='r', newline='') as infile:
+        reader = csv.reader(infile)
+        next(reader)    
+        
+        for row in reader:
+            #remove empty cells & then also check for commas or spaces within cells
+            line = [format_cell(cell) for cell in row if format_cell(cell)]
 
             # check if the barcode is dual indexed if so join these together
             if dual_barcode:
@@ -118,6 +118,21 @@ def read_run_info(file,dual_barcode):
                 run_dict[run_info] = [run_info_filename, barcode]
 
     return(run_dict)
+
+    
+def format_cell(cell):
+# function to format the contents of a cell to fix any issues that might mess with naming
+    cell = cell.strip()
+
+    if ',' in cell:
+        items = cell.split(',')
+        items = [item.strip() for item in items]  # Remove leading/trailing spaces
+        cell = ''.join(items)
+
+    if " " in cell:
+        cell = cell.replace(" ", "_")
+
+    return cell
 
 def parse_arguments():
 
