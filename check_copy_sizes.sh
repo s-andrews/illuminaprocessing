@@ -198,7 +198,12 @@ write_out "\n---- fq -----"
 write_out "$(h_size "$fq1")\tscratch"
 write_out "$(h_size "$fq2")\tseqfac\n"
 
-if [ -f $SEQFAC_UNALIGNED/*multiqc*html ]; then
+# need to deal with multi-runs which have multiple multiqc reports
+num_multiqc_reports=$(find $SEQFAC_UNALIGNED/ -name *multiqc*html | wc -l)
+
+if [ "$num_multiqc_reports" -gt 1 ]; then
+	write_out "$num_multiqc_reports multiqc reports found in $SEQFAC_UNALIGNED\n"
+elif [ "$num_multiqc_reports" == 1 ]; then
 	write_out "multiqc report found in $SEQFAC_UNALIGNED\n"
 else	
 	write_out "No multiqc report found in $SEQFAC_UNALIGNED\n"
