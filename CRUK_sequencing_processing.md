@@ -73,8 +73,11 @@ first we want to tidy and rename them.
 
     mkdir raw_data
     mv *lostreads* raw_data/
-    mv *bcl2fastq.zip raw_data/
+    mv *bclconvert.zip raw_data/
     mv *md5sums.txt raw_data/
+    mv *contents.csv raw_data/
+    
+Tar it up ready for copying 
 
     nohup tar -zcvf raw_data_L001_.tar.gz raw_data &
 
