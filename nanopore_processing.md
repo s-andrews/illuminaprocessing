@@ -1,10 +1,3 @@
----
-output: 
-  html_document: 
-    toc: true
-    keep_md: true
----
-
 # PromethION processing
 
 A folder is created in `/data` on pipeline2. This doesn't yet have a naming convention. The output file types that we get depend on what options have been selected on the machine when the run is initiated.
