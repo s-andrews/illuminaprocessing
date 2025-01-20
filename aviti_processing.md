@@ -12,9 +12,17 @@ nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
 This runs bases2fastq, creates a directory structure on /primary and copies the fastq files from /data to /primary.   
 It also checks the first 100,000 index reads and writes out the most frequently occurring to a text file. This is so that a manual check can be carried out to see if the barcodes look right before running the demultiplexing.
 
+That `process_aviti.py` uses the default AVITI run manifest settings for R1 and R2 where the final base is masked, which can cause problems if we need every single base.
+There is now another script `process_aviti_no_trim.py` that can be used instead that does not remove the final base.
+
+``` bash
+nohup ~/illuminaprocessing/process_aviti_no_trim.py [run_folder] > xx.log &
+```
+
+
 ## Demultiplexing
 
-As detailed further down, the existing demultiplexing script needed some modifications to work with the AVITI data. There are currently 3 separate aviti splitting scripts to choose from - we should write a simple wrapper around these.   
+As detailed further down, the existing demultiplexing script needed some modifications to work with the AVITI data. There are currently 4 separate aviti splitting scripts to choose from.   
 For now, we've got:    
 - `split_barcodes_aviti_dual_index` - for dual index, paired end
 - `split_barcodes_aviti_dual_index_single_end` - for dual index, single end
