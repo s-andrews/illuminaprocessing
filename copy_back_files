@@ -8,9 +8,13 @@ use Getopt::Long;
 
 my $debug = 0;
 my $force = 0;
+my $nosymlink = 0;
 
-GetOptions(force => \$force,
-	   debug => \$debug) or die;
+GetOptions(
+    force => \$force,
+	debug => \$debug,
+    nosymlink => \$nosymlink,
+) or die;
 
 my ($run_folder,@files) = @ARGV;
 
@@ -37,11 +41,11 @@ exit;
 
 # Start by getting the name of the Project folder
 my $illumina = 'primary';
-my $project = `ssh SBSUser\@pipeline1 ls -d /${illumina}/${run_folder}/Unaligned/Project*`;
+my $project = `ssh sbsuser\@pipeline2 ls -d /${illumina}/${run_folder}/Unaligned/Project*`;
 
 if ($project !~ /Project/) {
     # Try illumina1
-    $project = `ssh SBSUser\@pipeline1 ls -d /illumina1/${run_folder}/Unaligned/Project*`;
+    $project = `ssh sbsuser\@pipeline2 ls -d /illumina1/${run_folder}/Unaligned/Project*`;
     $illumina = 'illumina1';
 }
 
@@ -67,9 +71,9 @@ foreach my $file (@files) {
 	next;
     }
 
-    if (-l $file) {
-	warn "Skipping $file as it's a symlink\n";
-	next;
+    if ($nosymlink && -l $file) {
+    	warn "Skipping $file as it's a symlink and we're ignoring those\n";
+        next;
     }
    
     my $lane;
@@ -84,6 +88,10 @@ foreach my $file (@files) {
     my $aligned = 0;
 
     if ($file =~ /bismark/) {
+	$aligned = 1;
+    }
+    # 10X added 14 09 2018
+    if ($file =~ /barcodes.tsv/ or $file =~ /genes.tsv/ or $file =~ /matrix.mtx/ or $file =~ /web_summary.html/ ) {
 	$aligned = 1;
     }
     if ($file =~ /anaconda/i) {
@@ -120,14 +128,14 @@ foreach my $file (@files) {
     if ($aligned) {
 	# We need to use the aligned folder and check that it exists
 
-	my $aligned_exists = `ssh SBSUser\@pipeline1 ls -d /$illumina/${run_folder}/Aligned/${project}/Sample_lane{$lane} 2>/dev/null`;
+	my $aligned_exists = `ssh sbsuser\@pipeline2 ls -d /$illumina/${run_folder}/Aligned/${project}/Sample_lane{$lane} 2>/dev/null`;
 	chomp $aligned_exists;
 
 	warn "Aligned exists = $aligned_exists\n" if ($debug);
 
 	unless ($aligned_exists) {
 
-	    my $command = "ssh SBSUser\@pipeline1 mkdir -p /$illumina/${run_folder}/Aligned/${project}/Sample_lane${lane}";
+	    my $command = "ssh sbsuser\@pipeline2 mkdir -p /$illumina/${run_folder}/Aligned/${project}/Sample_lane${lane}";
 
 	    warn "Running '$command'\n" if ($debug);
 
@@ -146,7 +154,7 @@ foreach my $file (@files) {
 
     warn "Just the name from $file is $just_name\n" if ($debug);
 
-    my $check_command = "ssh SBSUser\@pipeline1 ls -d ${path}/${just_name} 2>/dev/null";
+    my $check_command = "ssh sbsuser\@pipeline2 ls -d ${path}/${just_name} 2>/dev/null";
     
     warn "Running '$check_command'\n" if ($debug);
 
@@ -157,10 +165,10 @@ foreach my $file (@files) {
 	next;
     }
 
-    my $command = "scp -B -q -r $file SBSUser\@pipeline1:$path";
+    my $command = "scp -B -q -r $file sbsuser\@pipeline2:$path";
 
     warn "Running '$command'\n" if ($debug);
 
-    system($command) == 0 or die "Failed to run 'ssh SBSUser\@pipeline1 $command'";
+    system($command) == 0 or die "Failed to run 'ssh sbsuser\@pipeline2 $command'";
 
 }	
