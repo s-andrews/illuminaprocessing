@@ -92,19 +92,21 @@ section_title=$(printf "#%.0s" $(seq 1 40))" Checking for Zipped Directories "$(
 printf "\n%s\n" "$section_title" >> "${processing_info_file}"
 
 #look for tar files
-zip_files=$(find "$dir_path" -type f -regex ".*X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+\.tar")
+tar_files=$(find "$dir_path" -type f -regex ".*X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+\.tar")
+zip_files=$(find "$dir_path" -type f -regex ".*X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+\.zip")
 
-if [[ -z "$zip_files" ]];then
+if [[ -z "$tar_files" ]] && [[ -z "$zip_files" ]] ;then
 
-    printf "%s\n" "No zip files found" >> "${processing_info_file}"
+    printf "%s\n" "No tar or zip files found" >> "${processing_info_file}"
 
-else
+elif [[ -n "$zip_files" ]] ;then
+
     while read -r file; do
 
         zip_dir=$(basename "$file")
         printf "%s\t%s\n" "Unzipping:" "${zip_dir}" >> "${processing_info_file}"
 
-        if tar -xf "${file}"; then
+        if unzip "${file}"; then
             printf "%s\t%s\n" "Successfully unzipped:" "${zip_dir}" >> "${processing_info_file}"
         else
             printf "%s\t%s\n" "Failed to unzip:" "${zip_dir}" >> "${processing_info_file}"
@@ -112,6 +114,22 @@ else
         fi
 
     done <<< "$zip_files"
+
+else
+    while read -r file; do
+
+            tar_dir=$(basename "$file")
+            printf "%s\t%s\n" "Unzipping:" "${tar_dir}" >> "${processing_info_file}"
+
+            if tar -xf "${file}"; then
+                printf "%s\t%s\n" "Successfully unzipped:" "${tar_dir}" >> "${processing_info_file}"
+            else
+                printf "%s\t%s\n" "Failed to unzip:" "${tar_dir}" >> "${processing_info_file}"
+                exit 1
+            fi
+
+        done <<< "$tar_files"
+
 fi
 
 ##################################################################################################
@@ -218,10 +236,9 @@ fi
 ##### Write out commands for merging files with the same base sample names / copying commands #####
 
 for sample in "${unique_sample_names[@]}";do
-
     ###### check whether the files are paired end, if so then write out commands for R2 files also ######
     mapfile -t run_end < <(find "${dir_path}" -type f -wholename "*${sample}/*.fq.gz" -printf "%f\n" | rev |cut -c 7 | sort -u)
-
+    
     if [ ${#run_end[@]} == 2 ];then
         run_type="Paired End"
     fi
@@ -232,42 +249,43 @@ for sample in "${unique_sample_names[@]}";do
     out_filename="${sample}""_L001_R1.fastq.gz"
 
     ###### find all the files associated with the sample name 
-    mapfile -t fastq_names < <( find "$dir_path" -type f -name "*${sample}*1.fq.gz")
-
+    mapfile -t fastq_names < <( find "$dir_path" -type f -name "*${sample}_*1.fq.gz")
+    #echo ${#fastq_names[@]}
+    #echo "${fastq_names[@]}"
     # Check if there is more than 1 file
-    # if yes, provide a command to merge all the files (saved in merge_commands.sh)
+    # if yes, provide a command to merge all the files (saved in extract_commands.sh)
     if  (( ${#fastq_names[@]} > 1 ))
     then
         #if the output file hasn't been made yet, make it
-        if [[ ! -f "merge_commands.sh" ]]; then
-                echo "#!/bin/bash" > merge_commands.sh
+        if [[ ! -f "extract_commands.sh" ]]; then
+                echo "#!/bin/bash" > extract_commands.sh
             fi
     # If more than 1 file then give instructions for merging
     read_1_command=$(printf "%s %s %s" "cat" "${fastq_names[*]}" "> ${dir_path}/${out_filename}")
     #echo "ssub -c 1 -m 5G --email -o ${out_filename} cat" "${fastq_names[@]}" >> merge_commands.sh
-    echo "$read_1_command" >> merge_commands.sh
+    echo "$read_1_command" >> extract_commands.sh
     
     # check from run-type variable provided if this is a paired end run, if so write out a R2 command also
         if [ "$run_type" == "Paired End" ]; then
             read_2_command="${read_1_command//1.fastq.gz/2.fastq.gz}"
             read_2_command="${read_2_command//1.fq.gz/2.fq.gz}"
-            echo "$read_2_command" >> merge_commands.sh
+            echo "$read_2_command" >> extract_commands.sh
         fi
 
     # if not, provide a command to cp the file (saved in cp_commands.sh)
     else
         #if the output file hasn't been made yet, make it
-        if [[ ! -f "cp_commands.sh" ]]; then
-            echo "#!/bin/bash" > cp_commands.sh
+        if [[ ! -f "extract_commands.sh" ]]; then
+            echo "#!/bin/bash" > extract_commands.sh
         fi
         #  again check from run-type variable provided if this is a paired end run, if so write out a R2 command also
         read_1_command=$(printf "%s %s %s" "cp" "${fastq_names[*]}" "${dir_path}/${out_filename}")
-        echo "$read_1_command" >> cp_commands.sh
+        echo "$read_1_command" >> extract_commands.sh
 
         if [ "$run_type" == "Paired End" ]; then
             read_2_command="${read_1_command//1.fastq.gz/2.fastq.gz}"
             read_2_command="${read_2_command//1.fq.gz/2.fq.gz}"
-            echo "$read_2_command" >> cp_commands.sh
+            echo "$read_2_command" >> extract_commands.sh
         fi
 
     fi   
@@ -309,8 +327,8 @@ fi
 printf "%s\t%s\t%s\n" "Sample Names Found" "No. Directories" "No. fq.gz files" >> "${processing_info_file}"
     for sample in "${unique_sample_names[@]}"; do
 
-        count_dir=$(grep -o "$sample" <<< ${unique_file_dir_paths[*]} | wc -l)
-        count_file=$(grep -o "$sample" <<< ${file_dir_paths[*]} | wc -l)
+        count_dir=$(grep -wo "${sample}" <<< ${unique_file_dir_paths[*]} | wc -l)
+        count_file=$(grep -wo "${sample}" <<< ${file_dir_paths[*]} | wc -l)
 
         printf "%s\t%s\t%s\n" "${sample}" "${count_dir}" "${count_file}" >> "${processing_info_file}"
     done
@@ -323,26 +341,25 @@ section_title=$(printf "#%.0s" $(seq 1 40))" Check Commands "$(printf "#%.0s" $(
 printf "\n%s\n" "$section_title" >> "${processing_info_file}"
 
 # First see if we have generated any commands for cat, then count how many if so
-if [[ -f "merge_commands.sh" ]]; then 
-    count_cat=$(wc -l < merge_commands.sh)
-    count_cat=$(( count_cat -1))
+if [[ -f "extract_commands.sh" ]]; then 
+    count_cat=$(grep -c '^cat' extract_commands.sh)
     printf "\n%s\n" "merge_commands.sh contains commands to merge technical duplicates of fq files" >> "${processing_info_file}"
     printf "%s\t%s\n" "Merge command count:" "${count_cat}" >> "${processing_info_file}"
 else
-    printf "\n%s\n" "merge_commands.sh does not exits, there are no technical duplicates of fq files to merge" >> "${processing_info_file}"
+    printf "\n%s\n" "extract_commands.sh does not exits, there is a problem" >> "${processing_info_file}"
     count_cat=0
 fi
 
-# Next see if we have generated any commands for cp, then count how many if so
-if [[ -f "cp_commands.sh" ]]; then 
-    count_cp=$(wc -l < cp_commands.sh)
-    count_cp=$(( count_cp -1))
+#Next see if we have generated any commands for cp, then count how many if so
+if [[ -f "extract_commands.sh" ]]; then 
+    count_cp=$(grep -c '^cp' extract_commands.sh)
     printf "\n%s\n" "cp_commands.sh contains commands to cp unduplicated fq files" >> "${processing_info_file}"
     printf "%s\t%s\n" "Copy command count:" "${count_cp}" >> "${processing_info_file}"
 else
-    printf "\n%s\n" "cp_commands.sh does not exits, there are no files to be copied" >> "${processing_info_file}"
+    printf "\n%s\n" "extract_commands.sh does not exits, there is a problem" >> "${processing_info_file}"
     count_cp=0
 fi
+
 
 # Now calculate how many commands we have vs how many we would expect
 # Expect a command for each unique sample name, 2 if the data is paired end
