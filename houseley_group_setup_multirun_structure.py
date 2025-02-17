@@ -38,6 +38,7 @@ def main():
 
     run_folder = options.run_folder
     info_file = options.run_info_file
+    no_header= options.no_header
 
     if not options.run_info_file.endswith(".csv"):
         parser.error("The run info file must be a CSV file.")
@@ -49,7 +50,7 @@ def main():
     seqfac_path="/bi/seqfac/seqfac/"+run_folder+"/Unaligned/Project_External/Sample_lane1/"
     
     # create the directory structure in the current working directory
-    run_dict = read_run_info(info_file)
+    run_dict = read_run_info(info_file,no_header)
 
     # create links to fastq files within the appropriate sub-directories 
     make_multi_run_structure(run_dict,working_dir,seqfac_path)
@@ -91,20 +92,22 @@ def make_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def read_run_info(file):
+def read_run_info(file,no_header):
     
     run_dict = {}
     
 
     with open(file, mode='r', newline='') as infile:
         reader = csv.reader(infile)
-        next(reader)    
+        #they dont always put a header line
+        if not no_header:
+            next(reader)    
         
         for row in reader:
             #remove empty cells & then also check for commas or spaces within cells
             line = [format_cell(cell) for cell in row if format_cell(cell)]
             
-            if check_if_dual(line[1]):
+            if check_if_dual(line[2]):
                 dual_barcode = True
             else:
                 dual_barcode = False
@@ -112,8 +115,7 @@ def read_run_info(file):
             # check if the barcode is dual indexed if so join these together
             if dual_barcode:
                 dir_name = '_'.join(line[3:])
-                barcode = '_'.join(line[1:2])
-
+                barcode = '_'.join(line[1:3])
             else:
                 dir_name = '_'.join(line[2:])
                 barcode = line[1]
@@ -142,22 +144,22 @@ def format_cell(cell):
     if ',' in cell:
         items = cell.split(',')
         items = [item.strip() for item in items]  # Remove leading/trailing spaces
-        cell = ':'.join(items)
+        cell = '-'.join(items)
 
     #add a check to remove spaces from cells
     cell = cell.replace(" ", "_")
 
     #add a check to remove brackets from cells
     cell = cell.replace('(', '').replace(')', '')
-
     return cell
 
 def parse_arguments():
 
     parser = argparse.ArgumentParser(description="Create a Directory Structure for Multi-sequencing runs & link to fastq files")
-    parser.add_argument("--dual", action='store_true', default=False)
+    #parser.add_argument("--dual", action='store_true', default=False)
     parser.add_argument("run_folder", help="Name of the run folder")
     parser.add_argument("run_info_file", help="Path to the run info CSV file")
+    parser.add_argument("no_header", action='store_true', help="specify if there is no header in file, default is false")
 
     return parser.parse_args()
       
