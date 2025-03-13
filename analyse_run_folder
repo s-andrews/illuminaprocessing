@@ -13,7 +13,7 @@ use POSIX ":sys_wait_h";
 my $data_folder = "/bi/seqfac/seqfac";
 my $working_folder = "/bi/scratch/run_processing";
 
-my $copy_back_files_path = '/bi/apps/copy_back_files/latest/copy_back_files2';
+my $copy_back_files_path = '/bi/apps/copy_back_files/latest/copy_back_files';
 my $nextflow_path = '/bi/apps/nextflow/nextflow_pipelines/';
 
 my $which_nf = `which nextflow`;
