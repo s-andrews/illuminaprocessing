@@ -92,44 +92,55 @@ section_title=$(printf "#%.0s" $(seq 1 40))" Checking for Zipped Directories "$(
 printf "\n%s\n" "$section_title" >> "${processing_info_file}"
 
 #look for tar files
-tar_files=$(find "$dir_path" -type f -regex ".*X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+\.tar")
-zip_files=$(find "$dir_path" -type f -regex ".*X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+\.zip")
+mapfile -t tar_files < <(find "$dir_path" -type f -regextype posix-extended -regex ".*/X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+(_[0-9]+)?\.tar")
+mapfile -t zip_files < <(find "$dir_path" -type f -regextype posix-extended -regex ".*/X[0-9]+SC[0-9]+-Z[0-9]+-F[0-9]+(_[0-9]+)?\.zip")
+
+printf "%s\t%s\n" "Number tar files found:" "${#tar_files[@]}" >> "${processing_info_file}"
+printf "%s\t%s\n" "Number zip files found:" "${#zip_files[@]}" >> "${processing_info_file}"
 
 if [[ -z "$tar_files" ]] && [[ -z "$zip_files" ]] ;then
-
     printf "%s\n" "No tar or zip files found" >> "${processing_info_file}"
+fi
 
-elif [[ -n "$zip_files" ]] ;then
+if [[ -n "$zip_files" ]] ;then
 
-    while read -r file; do
+    for zip_file in ${zip_files[@]}; do
 
-        zip_dir=$(basename "$file")
-        printf "%s\t%s\n" "Unzipping:" "${zip_dir}" >> "${processing_info_file}"
+        while read -r file; do
 
-        if unzip "${file}"; then
-            printf "%s\t%s\n" "Successfully unzipped:" "${zip_dir}" >> "${processing_info_file}"
-        else
-            printf "%s\t%s\n" "Failed to unzip:" "${zip_dir}" >> "${processing_info_file}"
-            exit 1
-        fi
+            zip_dir=$(basename "$file")
+            printf "%s\t%s\n" "Unzipping:" "${zip_dir}" >> "${processing_info_file}"
 
-    done <<< "$zip_files"
-
-else
-    while read -r file; do
-
-            tar_dir=$(basename "$file")
-            printf "%s\t%s\n" "Unzipping:" "${tar_dir}" >> "${processing_info_file}"
-
-            if tar -xf "${file}"; then
-                printf "%s\t%s\n" "Successfully unzipped:" "${tar_dir}" >> "${processing_info_file}"
+            if unzip "${file}"; then
+                printf "%s\t%s\n" "Successfully unzipped:" "${zip_dir}" >> "${processing_info_file}"
             else
-                printf "%s\t%s\n" "Failed to unzip:" "${tar_dir}" >> "${processing_info_file}"
+                printf "%s\t%s\n" "Failed to unzip:" "${zip_dir}" >> "${processing_info_file}"
                 exit 1
             fi
 
-        done <<< "$tar_files"
+        done <<< "$zip_file"
 
+    done
+fi 
+
+if [[ -n "$tar_files" ]] ;then
+
+    for tar_file in ${tar_files[@]}; do
+
+        while read -r file; do
+
+                tar_dir=$(basename "$file")
+                printf "%s\t%s\n" "Unzipping:" "${tar_dir}" >> "${processing_info_file}"
+
+                if tar -xf "${file}"; then
+                    printf "%s\t%s\n" "Successfully unzipped:" "${tar_dir}" >> "${processing_info_file}"
+                else
+                    printf "%s\t%s\n" "Failed to unzip:" "${tar_dir}" >> "${processing_info_file}"
+                    exit 1
+                fi
+
+            done <<< "$tar_file"
+    done
 fi
 
 ##################################################################################################
