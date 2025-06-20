@@ -31,11 +31,23 @@ def main():
 
     I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
     if os.path.exists(I2_file):
+        dual_coded = True
         get_barcodes_I2(run_folder, n_bars_to_check)
+        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
     else:
         print("Single indexed library")
+        dual_coded = False
+        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
 
-    print(f"\nAll done. \nExpected barcodes have been written out to a file - check these before running the barcode splitting script.\n")
+    try:
+        R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
+        subprocess.run(R_cmd, shell=True, executable="/bin/bash")
+
+    except Exception as err:
+        print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
+        print(err)
+
+    print(f"\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
 
 
 #--------------------------------
@@ -125,7 +137,7 @@ def get_barcodes_I1(run_folder, n_bars_to_check):
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
 
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} > found_barcodes_L001_I1.txt"
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' > i1_head.txt"
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -146,7 +158,7 @@ def get_barcodes_I2(run_folder, n_bars_to_check):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} > found_barcodes_L001_I2.txt"
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' > i2_head.txt"    
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -159,9 +171,33 @@ def get_barcodes_I2(run_folder, n_bars_to_check):
         print(f"\n !! Couldn't run barcode checking command !!")
         print(err)
 
+#---------------------
+# sort top barcodes
+#---------------------
+def sort_top_barcodes(run_folder, n_bars_to_check, dual_coded):
+
+    try:
+        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
+
+        if dual_coded:
+            bc_sort_cmd = f"paste -d '_' i1_head.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_L001_barcodes.txt"
+           # bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | awk '{{$1=$1;print}}' | tr ' ' '\t' > found_barcodes_L001_I2.txt"
+        else:
+            bc_sort_cmd = f"sort i1_head.txt | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_L001_barcodes.txt"
+
+        try:
+            subprocess.run(bc_sort_cmd, shell=True, executable="/bin/bash")
+            
+        except Exception as err:
+            print(f"\n !! Couldn't run barcode sorting command !!")
+            print(err)
+            
+    except Exception as err:
+        print(f"\n !! Couldn't run barcode sorting command !!")
+        print(err)
 
 # This writes out the expected barcodes to a text file and returns the number of expected barcodes.
-# We only really need the number of expected barcodes for now while we're just doing a quick check.
+# The text file is used in the R script.
 def get_expected_barcodes(run_folder):
 
     try:
@@ -176,11 +212,11 @@ def get_expected_barcodes(run_folder):
         cursor.execute(query)
         barcode1_count=0
 
-        expected_barcodes = open("expected_barcodes_L001_1.txt", "w")
+        expected_barcodes = open("expected_barcodes.txt", "w")
 
         for (row) in cursor:
-            print(row[0])
-            expected_barcodes.write(f"{row[0]}\n")
+            print(row)
+            expected_barcodes.write(f"{row[0]},{row[1]},{row[2]}\n")
             barcode1_count+=1
 
         expected_barcodes.close()
