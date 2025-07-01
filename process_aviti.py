@@ -137,7 +137,7 @@ def get_barcodes_I1(run_folder, n_bars_to_check):
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
 
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' > i1_head.txt"
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 4000000 | awk 'NR % 4 == 2' > i1_head.txt"
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -158,7 +158,7 @@ def get_barcodes_I2(run_folder, n_bars_to_check):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' > i2_head.txt"    
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 4000000 | awk 'NR % 4 == 2' > i2_head.txt"    
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")

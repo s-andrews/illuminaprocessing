@@ -6,7 +6,7 @@ cmd_args <- commandArgs(trailingOnly = TRUE)
 run_folder <- cmd_args[1]
 print(paste0("run folder is ", run_folder))
 
-n_seqs_checked <- 100000
+n_seqs_checked <- 1000000
 
 barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
 
@@ -65,3 +65,8 @@ p <- all |>
   theme(plot.title = element_text(family = "sans", size = 16, hjust = 0.5, margin = margin(20,0,30,0)))
 
 ggsave(outfile, plot = p, units = "px", width = 2000, height=100+(100*nrow(all)))
+
+# change this so that we don't have the barlabels as the first column
+textout <- "barcode_L001_plot_data.txt"
+outdata <- dplyr::select(all, -barlabel)
+readr::write_tsv(outdata, file = textout)
