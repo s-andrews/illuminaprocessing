@@ -27,7 +27,9 @@ from datetime import datetime
 
 # /bi/group/bioinf/Laura_B/python_barcode_splitting/split_barcodes.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250618_AV240405_AV_B_ET6249_SE75_18062025 
 
-# nohup ~/illuminaprocessing split_barcodes_python.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250618_AV240405_AV_B_ET6249_SE75_18062025 > barcode_splitting.log
+# nohup ~/illuminaprocessing/split_barcodes_aviti.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250618_AV240405_AV_B_ET6249_SE75_18062025 > barcode_splitting.log
+
+# nohup ~/illuminaprocessing/split_barcodes_aviti.py --i1_umi --barcode_length 8 20250618_AV240405_AV_A_PG6247_PE75_18062025 > barcode_splitting.log &
 
 fhsR1 = {}           # storing the filehandles for all output files - dictionary of filehandles where key is sample barcode
 fhsR2 = {}
@@ -76,9 +78,10 @@ def main():
         expected_barcodes_list = get_expected_barcodes(run_folder, lane_number)
         expected_barcodes = expected_barcodes_list[0]
         double_coded = expected_barcodes_list[1]
+        lane = expected_barcodes_list[2]
         print(f"barcodes are {expected_barcodes}. \nIs this a double coded library? {double_coded}")
 
-        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length, i1_umi, path_from_run_folder)
+        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length, i1_umi, path_from_run_folder, lane)
 
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!  Is the run folder correct? {run_folder}")
@@ -91,7 +94,7 @@ def main():
 #  do the splitting
 #----------------------------------------------
 
-def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length, i1_umi, path_from_run_folder):
+def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length, i1_umi, path_from_run_folder, lane):
   
     R1 = get_R1(file_location)
     R2 = get_R2(file_location)
@@ -111,20 +114,28 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
     for key in expected_barcodes:
 
-        new_filenameR1 = f"laneX_{key}_{expected_barcodes[key]}_L001_R1.fastq.gz"
+        new_filenameR1 = f"lane{lane}_{key}_{expected_barcodes[key]}_L001_R1.fastq.gz"
         open_filehandlesR1(new_filenameR1, key, path_from_run_folder)
 
         if paired_end:
-            new_filenameR2 = f"laneX_{key}_{expected_barcodes[key]}_L001_R2.fastq.gz"
+            new_filenameR2 = f"lane{lane}_{key}_{expected_barcodes[key]}_L001_R2.fastq.gz"
             open_filehandlesR2(new_filenameR2, key, path_from_run_folder)
 
     # also open an unassigned file
     new_filenameR1 = f"lane1_NoCode_L001_R1.fastq.gz"
     open_filehandlesR1(new_filenameR1, "unassigned", path_from_run_folder)
+    new_filenameI1 = f"lane1_NoCode_L001_I1.fastq.gz"
+    open_filehandlesR1(new_filenameI1, "unassigned_I1", path_from_run_folder)
+
+    if double_coded:
+        new_filenameI2 = f"lane1_NoCode_L001_I2.fastq.gz"
+        open_filehandlesR1(new_filenameI2, "unassigned_I2", path_from_run_folder)    
 
     if paired_end:
         new_filenameR2 = f"lane1_NoCode_L001_R2.fastq.gz"
         open_filehandlesR2(new_filenameR2, "unassigned", path_from_run_folder)
+
+    print(f"opened all the file handles")
 
     r1 = gzip.open(R1)
     i1 = gzip.open(I1)
@@ -143,7 +154,7 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
         assigned_count = 0
 
         while True:
-        #while line_count <= 4000: 
+        #while line_count <= 400: 
             readID_R1  = r1.readline().decode().strip()
             seq_R1     = r1.readline().decode().strip()
             line3_R1   = r1.readline().decode().strip()
@@ -163,8 +174,8 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
             readID_I1  = i1.readline().decode().strip()
             seq_I1     = i1.readline().decode().strip()
-            line3_I1   = i1.readline()#.decode().strip()
-            qual_I1    = i1.readline()#.decode().strip()
+            line3_I1   = i1.readline().decode().strip()
+            qual_I1    = i1.readline().decode().strip()
             shortID_I1 = readID_I1.split(" ")[0]
 
             if I1_trim > 0:
@@ -174,17 +185,20 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 seq_I1 = reverse_complement(seq_I1)
 
             if i1_umi and barcode_length > 0:
+                full_seq_I1 = seq_I1
                 seq_I1 = seq_I1[0:barcode_length]
-                umi = seq_I1[barcode_length:]
-                readID += f':{umi}'
+                umi = full_seq_I1[barcode_length:]
+                #print(f"umi = {umi}")
+                #readID_R1 += f':{umi}'
+                #print(f"readID_R1 = {readID_R1}")
             elif barcode_length > 0:
                 seq_I1 = seq_I1[0:barcode_length]
 
             if double_coded:
                 readID_I2  = i2.readline().decode().strip()
                 seq_I2     = i2.readline().decode().strip()
-                line3_I2   = i2.readline()#.decode().strip()
-                qual_I2    = i2.readline()#.decode().strip()
+                line3_I2   = i2.readline().decode().strip()
+                qual_I2    = i2.readline().decode().strip()
                 shortID_I2 = readID_I2.split(" ")[0]
 
                 if I2_revcomp:
@@ -200,6 +214,9 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 #print(f"Found it!! {barcode} has the name {expected_barcodes[barcode]}")
                 readID_R1 = f"{readID_R1} {barcode}"
 
+                if i1_umi and barcode_length > 0:
+                    readID_R1 += f':{umi}'
+
                 # this one's quicker - is it because we're not writing out so many times?
                 fhsR1[barcode].write (("\n".join([readID_R1, seq_R1, line3_R1, qual_R1]) + "\n").encode())
 
@@ -207,12 +224,19 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 if paired_end:
                     readID_R2 = f"{readID_R2} {barcode}"
 
+                    if i1_umi and barcode_length > 0:
+                        readID_R2 += f':{umi}'
+
                     fhsR2[barcode].write (("\n".join([readID_R2, seq_R2, line3_R2, qual_R2]) + "\n").encode())
 
             else:
                 #print(f"Couldn't find this {barcode}")
                 unassigned_count +=1
                 fhsR1["unassigned"].write (("\n".join([readID_R1, seq_R1, line3_R1, qual_R1]) + "\n").encode())
+                fhsR1["unassigned_I1"].write (("\n".join([readID_I1, seq_I1, line3_I1, qual_I1]) + "\n").encode())
+
+                if double_coded:
+                    fhsR1["unassigned_I2"].write (("\n".join([readID_I2, seq_I2, line3_I2, qual_I2]) + "\n").encode())
 
                 if paired_end:
                     fhsR2["unassigned"].write (("\n".join([readID_R2, seq_R2, line3_R2, qual_R2]) + "\n").encode())
@@ -343,8 +367,14 @@ def get_expected_barcodes(run_folder, lane_number):
         cursor = cnx.cursor()
 
         # lane_number will mostly be 1 for aviti and miseq - but we are starting to get some 2s
+        # query = (
+        #     f"select barcode.5_prime_barcode,barcode.3_prime_barcode,barcode.name from run,flowcell,lane,barcode " 
+        #     f"WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id " 
+        #     f"AND lane.lane_number='{lane_number}' AND lane.sample_id = barcode.sample_id"
+        # )
+
         query = (
-            f"select barcode.5_prime_barcode,barcode.3_prime_barcode,barcode.name from run,flowcell,lane,barcode " 
+            f"select barcode.5_prime_barcode,barcode.3_prime_barcode,barcode.name,lane.id from run,flowcell,lane,barcode " 
             f"WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id " 
             f"AND lane.lane_number='{lane_number}' AND lane.sample_id = barcode.sample_id"
         )
@@ -358,6 +388,7 @@ def get_expected_barcodes(run_folder, lane_number):
             # sample name is always the 3rd field, the 2nd is empty if it is single barcoded
             sample_name = row[2].strip()
             sample_name = clean_sample_name(sample_name)
+            lane = row[3]
 
             if count == 0:                
                 if  bc2 == "":
@@ -377,7 +408,7 @@ def get_expected_barcodes(run_folder, lane_number):
 
         cnx.close()
         print(f"\nFound {count} expected barcodes in Sierra\n")
-        return([barcode_dict, double_coded])
+        return([barcode_dict, double_coded, lane])
         
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!")
