@@ -7,6 +7,8 @@ import mysql.connector
 # we might move to running it from /data when we make it compatible with MiSeq as well.
 # nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
 
+n_fastq_lines = 4000000 # 1 million sequences
+
 def main():
 
     run_folder = sys.argv[1]
@@ -25,7 +27,7 @@ def main():
 
     # quick barcode check
     barcode1_count = get_expected_barcodes(run_folder)
-    n_bars_to_check = str(barcode1_count+2)
+    n_bars_to_check = str(barcode1_count+10)
 
     get_barcodes_I1(run_folder, n_bars_to_check)
 
@@ -136,8 +138,7 @@ def get_barcodes_I1(run_folder, n_bars_to_check):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 4000000 | awk 'NR % 4 == 2' > i1_head.txt"
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' > i1_head.txt"
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -158,7 +159,7 @@ def get_barcodes_I2(run_folder, n_bars_to_check):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 4000000 | awk 'NR % 4 == 2' > i2_head.txt"    
+        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' > i2_head.txt"    
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -180,10 +181,9 @@ def sort_top_barcodes(run_folder, n_bars_to_check, dual_coded):
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
 
         if dual_coded:
-            bc_sort_cmd = f"paste -d '_' i1_head.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_L001_barcodes.txt"
-           # bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | awk '{{$1=$1;print}}' | tr ' ' '\t' > found_barcodes_L001_I2.txt"
+            bc_sort_cmd = f"paste -d '_' i1_head.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
         else:
-            bc_sort_cmd = f"sort i1_head.txt | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_L001_barcodes.txt"
+            bc_sort_cmd = f"sort i1_head.txt | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
 
         try:
             subprocess.run(bc_sort_cmd, shell=True, executable="/bin/bash")
