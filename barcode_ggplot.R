@@ -11,7 +11,7 @@ n_seqs_checked <- 1000000
 barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
 
 exp_file <- paste0(barcode_folder, "expected_barcodes.txt")
-found_file <- paste0(barcode_folder, "found_L001_barcodes.txt")
+found_file <- paste0(barcode_folder, "found_barcodes.txt")
 
 exp <- readr::read_delim(file=exp_file, col_names = c("bc1", "bc2", "name"))
 found <- readr::read_delim(found_file, col_names = c("count", "bc")) |>
@@ -49,7 +49,7 @@ all <- exp |>
   
 bar_colours <- c(present = "seagreen", unexpected = "orangered", missing = "grey")
 outfile <- "barcode_L001_plot.png"
-plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of the data")
+plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of the first million sequences")
 
 p <- all |>
   ggplot(aes(x = barlabel, y = percentage, fill = status)) +
