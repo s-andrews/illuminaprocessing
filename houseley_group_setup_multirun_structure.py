@@ -64,7 +64,8 @@ def make_multi_run_structure(run_dict, working_dir,seqfac_path):
 def make_links(seqfac_path, dest_dir, run_type,barcodes):
     
     #the barcodes to search for
-    patterns = [re.compile(barcode) for barcode in barcodes]
+    # added a fix here to handle lower case bases in barcode sheet
+    patterns = [re.compile(barcode.upper()) for barcode in barcodes]
 
     # Extract the unique ID from the dir_name (i.e. run_type)
     ID = run_type.split('_')[0]
@@ -159,7 +160,7 @@ def parse_arguments():
     #parser.add_argument("--dual", action='store_true', default=False)
     parser.add_argument("run_folder", help="Name of the run folder")
     parser.add_argument("run_info_file", help="Path to the run info CSV file")
-    parser.add_argument("no_header", action='store_true', help="specify if there is no header in file, default is false")
+    parser.add_argument("--no_header", action='store_true', default=False, help="specify if there is no header in file, default is false")
 
     return parser.parse_args()
       
