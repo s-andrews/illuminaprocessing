@@ -19,14 +19,6 @@ from datetime import datetime
 # Check the TrAEL format as that's how the deduplication works
 # option to pass in a csv samplesheet if we don't want to get the sample info from Sierra.
 
-# single barcoded
-# ../../split_barcodes.py 20250404_AV240405_AV_B_PRG6210_PE75_04042025
-
-# dual barcoded - we don't need to supply the files 
-# python3 ../../split_barcodes.py 20250127_AV240405_AV_B_MT6176_ET6177_SE75_27012025 lane1_NoIndex_L001_R1.fastq.gz lane1_NoIndex_L001_I1.fastq.gz lane1_NoIndex_L001_I2.fastq.gz
-
-# /bi/group/bioinf/Laura_B/python_barcode_splitting/split_barcodes.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250618_AV240405_AV_B_ET6249_SE75_18062025 
-
 # nohup ~/illuminaprocessing/split_barcodes_aviti.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250618_AV240405_AV_B_ET6249_SE75_18062025 > barcode_splitting.log
 
 # nohup ~/illuminaprocessing/split_barcodes_aviti.py --i1_umi --barcode_length 8 20250618_AV240405_AV_A_PG6247_PE75_18062025 > barcode_splitting.log &
@@ -41,7 +33,7 @@ prepath = "/primary/"
 
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''For demultiplexing fastq files''')
 parser.add_argument('run_folder', type=str, default="", help='run folder name')
-#parser.add_argument('--sample_sheet', type=str, default="", help='[Optional] sample sheet will be pulled from Sierra by default')
+parser.add_argument('--sample_sheet', type=str, default="", help='[Optional] Tab delimited barcode sheet "First_barcode\tSecond_barcode\tDescription\tLane". Lane should be 1 or 2. sample sheet will be pulled from Sierra by default')
 parser.add_argument('--lane_number', type=str, default="1", help='Lane number on flow cell i.e. L001 will be 1. Default: 1 !!This option has not been fully implemented!!')
 
 #parser.add_argument('--verbose', default=False, action='store_true', help='verbose processing')
@@ -49,7 +41,7 @@ parser.add_argument('--i1_umi', default=False, action='store_true', help='If UMI
 parser.add_argument('--i1_trim', type=int, default=0, help='Trim first n bases from I1 (initially used for IDT xGen Stubby Adapter where the first 3 bases need to be removed)')
 parser.add_argument('--i1_revcomp', default=False, action='store_true', help='Reverse complement the I1 sequence')
 parser.add_argument('--i2_revcomp', default=False, action='store_true', help='Reverse complement the I2 sequence')
-parser.add_argument('--barcode_length', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s)')
+parser.add_argument('--barcode_length', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
 
 args=parser.parse_args()
 
@@ -60,7 +52,8 @@ I1_revcomp = args.i1_revcomp
 I2_revcomp = args.i2_revcomp
 barcode_length = args.barcode_length
 i1_umi = args.i1_umi
-lane_number = args.lane_number
+lane_number = args.lane_number  # the short lane number i.e. 1 or 2
+sample_sheet = args.sample_sheet
 
 path_from_run_folder = f"Unaligned/Project_External/Sample_lane{lane_number}/"
 
@@ -71,17 +64,25 @@ def main():
     
     file_location = f"{prepath}{run_folder}/{path_from_run_folder}"
    
-    log_filename = f"splitting_info.log"
+    log_filename = "splitting_info.log"
     fhsR1["log"] = open(log_filename, mode = "w")
 
     try:
-        expected_barcodes_list = get_expected_barcodes(run_folder, lane_number)
+        if (sample_sheet == ""):
+            print(f"\n Using barcodes from Sierra")
+            expected_barcodes_list = get_expected_barcodes(run_folder, lane_number)
+        else:
+            print(f"\n Using custom barcode sheet")
+            expected_barcodes_list = get_expected_barcodes_sample_sheet(run_folder, lane_number, sample_sheet)
+
         expected_barcodes = expected_barcodes_list[0]
         double_coded = expected_barcodes_list[1]
-        lane = expected_barcodes_list[2]
+        lane_id = expected_barcodes_list[2] # this is the lane id - not 1 or 2
         print(f"barcodes are {expected_barcodes}. \nIs this a double coded library? {double_coded}")
+        print(f"lane ID is {lane_id}.")
+        print(f"lane number is {lane_number}.")
 
-        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length, i1_umi, path_from_run_folder, lane)
+        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length, i1_umi, path_from_run_folder, lane_id, lane_number)
 
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!  Is the run folder correct? {run_folder}")
@@ -94,7 +95,7 @@ def main():
 #  do the splitting
 #----------------------------------------------
 
-def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length, i1_umi, path_from_run_folder, lane):
+def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length, i1_umi, path_from_run_folder, lane_id, lane_number):
   
     R1 = get_R1(file_location)
     R2 = get_R2(file_location)
@@ -114,28 +115,28 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
     for key in expected_barcodes:
 
-        new_filenameR1 = f"lane{lane}_{key}_{expected_barcodes[key]}_L001_R1.fastq.gz"
+        new_filenameR1 = f"lane{lane_id}_{key}_{expected_barcodes[key]}_L00{lane_number}_R1.fastq.gz"
         open_filehandlesR1(new_filenameR1, key, path_from_run_folder)
 
         if paired_end:
-            new_filenameR2 = f"lane{lane}_{key}_{expected_barcodes[key]}_L001_R2.fastq.gz"
+            new_filenameR2 = f"lane{lane_id}_{key}_{expected_barcodes[key]}_L00{lane_number}_R2.fastq.gz"
             open_filehandlesR2(new_filenameR2, key, path_from_run_folder)
 
     # also open an unassigned file
-    new_filenameR1 = f"lane1_NoCode_L001_R1.fastq.gz"
+    new_filenameR1 = f"lane{lane_number}_NoCode_L00{lane_number}_R1.fastq.gz"
     open_filehandlesR1(new_filenameR1, "unassigned", path_from_run_folder)
-    new_filenameI1 = f"lane1_NoCode_L001_I1.fastq.gz"
+    new_filenameI1 = f"lane{lane_number}_NoCode_L00{lane_number}_I1.fastq.gz"
     open_filehandlesR1(new_filenameI1, "unassigned_I1", path_from_run_folder)
 
     if double_coded:
-        new_filenameI2 = f"lane1_NoCode_L001_I2.fastq.gz"
+        new_filenameI2 = f"lane{lane_number}_NoCode_L00{lane_number}_I2.fastq.gz"
         open_filehandlesR1(new_filenameI2, "unassigned_I2", path_from_run_folder)    
 
     if paired_end:
-        new_filenameR2 = f"lane1_NoCode_L001_R2.fastq.gz"
+        new_filenameR2 = f"lane{lane_number}_NoCode_L00{lane_number}_R2.fastq.gz"
         open_filehandlesR2(new_filenameR2, "unassigned", path_from_run_folder)
 
-    print(f"opened all the file handles")
+    print("opened all the file handles")
 
     r1 = gzip.open(R1)
     i1 = gzip.open(I1)
@@ -211,13 +212,12 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
             if barcode in expected_barcodes.keys():
                 assigned_count +=1
-                #print(f"Found it!! {barcode} has the name {expected_barcodes[barcode]}")
+                #print(f"Found it! {barcode} has the name {expected_barcodes[barcode]}")
                 readID_R1 = f"{readID_R1} {barcode}"
 
                 if i1_umi and barcode_length > 0:
                     readID_R1 += f':{umi}'
 
-                # this one's quicker - is it because we're not writing out so many times?
                 fhsR1[barcode].write (("\n".join([readID_R1, seq_R1, line3_R1, qual_R1]) + "\n").encode())
 
 
@@ -284,7 +284,6 @@ def close_filehandles():
 		fhsR2[name].close() 
 
 
-# from chat gpt - check this
 def reverse_complement(dna_seq):
     """Return the reverse complement of a DNA sequence."""
     # Create a mapping of each nucleotide to its complement
@@ -302,58 +301,68 @@ def reverse_complement(dna_seq):
     return rev_comp
 
 
-#---------------------
-# quick barcode check
-#---------------------
-def get_barcodes_I1(run_folder, n_bars_to_check):
-
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n 400000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} > found_barcodes_L001_I1.txt"
-
-        try:
-            subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
-            
-        except Exception as err:
-            print(f"\n !! Couldn't run barcode checking command !!")
-            print(err)
-            
-    except Exception as err:
-            print(f"\n !! Couldn't run barcode checking command !!")
-            print(err)
-
-
-#---------------------
-# quick barcode check
-#---------------------
-def get_barcodes_I2(run_folder, n_bars_to_check):
-
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n 100000 | awk 'NR % 4 == 2' | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} > found_barcodes_L001_I2.txt"
-
-        try:
-            subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
-            
-        except Exception as err:
-            print(f"\n !! Couldn't run barcode checking command !!")
-            print(err)
-            
-    except Exception as err:
-        print(f"\n !! Couldn't run barcode checking command !!")
-        print(err)
-
-
 #---------------------------------------------------
 # remove any unwanted characters from sample names
 #---------------------------------------------------
 def clean_sample_name(sample_name):    
     return re.sub(r'[^a-zA-Z0-9.\-_]+_?', '_', sample_name)
 
+#---------------------------------------------------------------------
+# Get the expected barcodes from custom sample sheet, not from Sierra
+#---------------------------------------------------------------------
+def get_expected_barcodes_sample_sheet(run_folder, lane_number, sample_sheet):
+
+    try:
+        double_coded = False
+        barcode_dict = {}
+        count = 0
+          
+        with open(sample_sheet, "r", newline = None) as ss:
+        
+            header = ss.readline()
+            print(f"header = {header}")
+
+            for line in ss:
+                print(line)
+
+                row = line.rstrip().split("\t")
+            
+                bc1 = row[0].strip()
+                bc2 = row[1].strip()
+                # sample name is always the 3rd field, the 2nd is empty if it is single barcoded
+                sample_name = row[2].strip()
+                sample_name = clean_sample_name(sample_name)
+                lane = row[3]
+                # print (f"bc1 = {bc1}")
+                # print (f"bc2 = {bc2}")
+                # print (f"sample name = {sample_name }")
+                # print (f"lane = {lane}")
+
+                if count == 0:                
+                    if  bc2 == "":
+                        print("barcode 2 is empty, assuming single coded")
+                        double_coded = False
+                    else:
+                        print("This is a double coded library.")
+                        double_coded = True   
+
+                if(double_coded):
+                    barcode_seq = f"{bc1}_{bc2}"
+                else:
+                    barcode_seq = bc1
+                    
+                barcode_dict[barcode_seq] = sample_name
+                count += 1
+
+        return([barcode_dict, double_coded, lane])
+
+    except Exception as err:
+        print(f"\n !! Couldn't get expected barcodes !!")
+        print(err)
+
 
 #---------------------------------------------------------
-# Get the expected barcodes from sample sheet in Sierra
+# Get the expected barcodes from Sierra
 #---------------------------------------------------------
 def get_expected_barcodes(run_folder, lane_number):
 
