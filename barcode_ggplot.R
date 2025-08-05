@@ -13,6 +13,7 @@ barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/S
 phiX_bc1 <- c("ATGTCGCT", "GCACATAG", "TGTGTCGA", "CACAGATC")
 phiX_dual8 <- c("ATGTCGCT_CTAGCTCG", "GCACATAG_GACTACTA", "TGTGTCGA_TGTCTGAC", "CACAGATC_ACGAGAGT")
 phiX_dual6 <- c("ATGTCG_CTAGCT", "GCACAT_GACTAC", "TGTGTC_TGTCTG", "CACAGA_ACGAGA")
+phiX_dual6_8 <- c("ATGTCG_CTAGCTCG", "GCACAT_GACTACTA", "TGTGTC_TGTCTGAC", "CACAGA_ACGAGAGT")
 
 exp_file <- paste0(barcode_folder, "expected_barcodes.txt")
 found_file <- paste0(barcode_folder, "found_barcodes.txt")
@@ -47,6 +48,7 @@ all <- exp |>
     status == "present" ~ "present",
     bc %in% phiX_dual8 ~ "PhiX",
     bc %in% phiX_dual6 ~ "PhiX",
+    bc %in% phiX_dual6_8 ~ "PhiX",
     bc %in% phiX_bc1 ~ "PhiX",
     .default = "unexpected"
   )) |> 
