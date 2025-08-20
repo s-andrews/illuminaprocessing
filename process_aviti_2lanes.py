@@ -10,6 +10,7 @@ import mysql.connector
 # I've commented out the barcode checking part for now.
 # nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
 
+
 def main():
 
     run_folder = sys.argv[1]
