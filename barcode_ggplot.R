@@ -19,7 +19,7 @@ phiX_dual6_8 <- c("ATGTCG_CTAGCTCG", "GCACAT_GACTACTA", "TGTGTC_TGTCTGAC", "CACA
 exp_file <- paste0(barcode_folder, "expected_barcodes.txt")
 found_file <- paste0(barcode_folder, "found_barcodes.txt")
 
-exp <- readr::read_delim(file=exp_file, col_names = c("bc1", "bc2", "name"))
+exp <- readr::read_csv(file=exp_file, col_names = c("bc1", "bc2", "name"))
 found <- readr::read_delim(found_file, col_names = c("count", "bc")) |>
   dplyr::mutate(percentage = 100*(count/n_seqs_checked))
 
