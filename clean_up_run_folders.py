@@ -25,6 +25,9 @@ stats = {
     "ONTRaw": [0,0]
 }
 
+folder_savings = {}
+
+
 def main():
 
     global options
@@ -50,6 +53,15 @@ def main():
 
 
 def print_stats():
+
+    # We'll print out the per-folder savings first
+
+    print("Folder Size Savings\n===================\n")
+
+    for folder in sorted(folder_savings.keys(), key=lambda x: folder_savings[x][0], reverse=True):
+        print(f"{folder:<30} {folder_savings[folder][1]}")
+
+    print("")
 
     total_size = 0
     total_files = 0
@@ -149,47 +161,60 @@ def process_sample_files(files):
 
     # Now we can go through the files trying to find if we can get rid of them.
 
+    saved_bytes = 0
+
     for file in files:
 
-        stop_further = False
+        this_saved_bytes = 0
         
-        stop_further = check_trimmed(file,files)
-        if stop_further:
+        this_saved_bytes = check_trimmed(file,files)
+        if this_saved_bytes:
+            saved_bytes += this_saved_bytes
             continue
 
         if has_split_data:
-            stop_further = check_unsplit(file,files)
-            if stop_further:
+            this_saved_bytes = check_unsplit(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
                 continue
 
-            stop_further = check_unassigned(file,files)
-            if stop_further:
+            this_saved_bytes = check_unassigned(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
                 continue
 
-            stop_further = check_cellranger_tar(file,files)
-            if stop_further:
+            this_saved_bytes = check_cellranger_tar(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
                 continue
 
-            stop_further = check_lostreads(file,files)
-            if stop_further:
+            this_saved_bytes = check_lostreads(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
                 continue
 
         if has_multiqc:
-            stop_further = check_unwanted_qc(file,files)
-            if stop_further:
+            this_saved_bytes = check_unwanted_qc(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
                 continue
 
-        stop_further = check_bismark_dedup(file,files)
-        if stop_further:
+        this_saved_bytes = check_bismark_dedup(file,files)
+        if this_saved_bytes:
+            saved_bytes += this_saved_bytes
             continue
         
-        stop_further = check_bismark_callfiles(file,files)
-        if stop_further:
+        this_saved_bytes = check_bismark_callfiles(file,files)
+        if this_saved_bytes:
+            saved_bytes += this_saved_bytes
             continue
 
-        stop_further = check_raw_ont_files(file,files)
-        if stop_further:
+        this_saved_bytes = check_raw_ont_files(file,files)
+        if this_saved_bytes:
+            saved_bytes += this_saved_bytes
             continue
+
+    return saved_bytes
 
 
 def check_raw_ont_files(file,files):
@@ -199,9 +224,9 @@ def check_raw_ont_files(file,files):
             print(files[file], file=delfh)
             stats["ONTRaw"][0] += 1
             stats["ONTRaw"][1] += files[file].stat().st_size
-            return True
+            return files[file].stat().st_size
 
-    return False
+    return 0
 
 
 
@@ -211,9 +236,9 @@ def check_lostreads(file,files):
         print(files[file], file=delfh)
         stats["LostReads"][0] += 1
         stats["LostReads"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 
 def check_cellranger_tar(file,files):
@@ -222,9 +247,9 @@ def check_cellranger_tar(file,files):
         print(files[file], file=delfh)
         stats["CellRangerTar"][0] += 1
         stats["CellRangerTar"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 
 
@@ -234,9 +259,9 @@ def check_bismark_callfiles(file,files):
         print(files[file], file=delfh)
         stats["BismarkCallFiles"][0] += 1
         stats["BismarkCallFiles"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 def check_bismark_dedup(file,files):
     if file.endswith("deduplicated.bam") and "bismark" in file:
@@ -246,9 +271,9 @@ def check_bismark_dedup(file,files):
             print(files[file], file=delfh)
             stats["BismarkDedup"][0] += 1
             stats["BismarkDedup"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 
 def check_unwanted_qc(file,files):
@@ -271,9 +296,9 @@ def check_unwanted_qc(file,files):
             print(files[file], file=delfh)
             stats["QC"][0] += 1
             stats["QC"][1] += files[file].stat().st_size
-            return True
+            return files[file].stat().st_size
         
-    return False
+    return 0
 
 
 
@@ -282,18 +307,18 @@ def check_unassigned(file,files):
         print(files[file], file=delfh)
         stats["Unassigned"][0] += 1
         stats["Unassigned"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 def check_unsplit(file,files):
     if "_NoIndex_" in file and file.endswith(".fastq.gz"):
         print(files[file], file=delfh)
         stats["Unsplit"][0] += 1
         stats["Unsplit"][1] += files[file].stat().st_size
-        return True
+        return files[file].stat().st_size
 
-    return False
+    return 0
 
 def check_trimmed(file, files):
     if file.endswith(".fq.gz") :
@@ -307,7 +332,7 @@ def check_trimmed(file, files):
                 print(files[file], file=delfh)
                 stats["Trimmed"][0] += 1
                 stats["Trimmed"][1] += files[file].stat().st_size
-            return True
+            return files[file].stat().st_size
 
         elif "_trimmed.fq.gz" in file:
             # It's a single end file
@@ -318,9 +343,9 @@ def check_trimmed(file, files):
                 print(files[file], file=delfh)
                 stats["Trimmed"][0] += 1
                 stats["Trimmed"][1] += files[file].stat().st_size
-            return True
+            return files[file].stat().st_size
 
-    return False
+    return 0
 
 
 def process_folder(folder):
@@ -364,10 +389,8 @@ def process_folder(folder):
 
 
     for sample in samples:
-        process_sample_files(sample_files[sample])
-
-
-
+        bytes_saved = process_sample_files(sample_files[sample])
+        folder_savings[f"{folder.name}_{sample}"] = (bytes_saved,make_file_size(bytes_saved))
 
 
 
