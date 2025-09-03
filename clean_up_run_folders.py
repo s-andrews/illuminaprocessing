@@ -109,7 +109,7 @@ def make_file_size(amount):
         unit="TB"
 
     amount_string = round(amount,1)
-    if unit!="TB":
+    if unit != "TB":
         amount_string = round(amount,0)
 
 
@@ -288,7 +288,13 @@ def check_unwanted_qc(file,files):
         "_screen.txt",
         ".deduplication_report.txt",
         ".M-bias.txt",
-        "_trimming_report.txt"
+        "_trimming_report.txt",
+        "_hisat2_stats.txt",
+        "_bismark_bt2_SE_report.txt",
+        "_bismark_bt2_SE_report.html",
+        "_bismark_bt2_PE_report.txt",
+        "_bismark_bt2_PE_report.html",
+        "_bowtie2_stats.txt"
     ]
 
     for suffix in suffixes:
