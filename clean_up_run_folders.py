@@ -104,7 +104,7 @@ def make_file_size(amount):
         amount /= 1024
         unit="GB"
 
-    if amount > 500:
+    if amount > 500 and unit=="GB":
         amount /= 1024
         unit="TB"
 
@@ -114,6 +114,8 @@ def make_file_size(amount):
 
 
     amount_string = str(amount_string)
+    if amount_string.endswith(".0"):
+        amount_string = amount_string[:-2]
     amount_string += " "
     amount_string += unit
 
