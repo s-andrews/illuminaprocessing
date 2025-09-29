@@ -224,10 +224,10 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 if i1_umi and barcode_length > 0:
                     readID_R1 += f':{umi}'
 
-                fhsR1[barcode].write(readID_R1+"\n")
-                fhsR1[barcode].write(seq_R1)
-                fhsR1[barcode].write(line3_R1)
-                fhsR1[barcode].write(qual_R1)
+                fhsR1[barcode].stdin.write(readID_R1+"\n")
+                fhsR1[barcode].stdin.write(seq_R1)
+                fhsR1[barcode].stdin.write(line3_R1)
+                fhsR1[barcode].stdin.write(qual_R1)
 
                 if paired_end:
                     readID_R2 = f"{readID_R2} {barcode}"
@@ -235,36 +235,36 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                     if i1_umi and barcode_length > 0:
                         readID_R2 += f':{umi}'
 
-                    fhsR2[barcode].write(readID_R2+"\n")
-                    fhsR2[barcode].write(seq_R2)
-                    fhsR2[barcode].write(line3_R2)
-                    fhsR2[barcode].write(qual_R2)
+                    fhsR2[barcode].stdin.write(readID_R2+"\n")
+                    fhsR2[barcode].stdin.write(seq_R2)
+                    fhsR2[barcode].stdin.write(line3_R2)
+                    fhsR2[barcode].stdin.write(qual_R2)
 
             else:
                 #print(f"Couldn't find this {barcode}")
                 unassigned_count +=1
 
-                fhsR1["unassigned"].write(readID_R1+"\n")
-                fhsR1["unassigned"].write(seq_R1)
-                fhsR1["unassigned"].write(line3_R1)
-                fhsR1["unassigned"].write(qual_R1)
+                fhsR1["unassigned"].stdin.write(readID_R1+"\n")
+                fhsR1["unassigned"].stdin.write(seq_R1)
+                fhsR1["unassigned"].stdin.write(line3_R1)
+                fhsR1["unassigned"].stdin.write(qual_R1)
 
-                fhsR1["unassigned_I1"].write(readID_I1)
-                fhsR2["unassigned_I1"].write(seq_I1+"\n")
-                fhsR2["unassigned_I1"].write(line3_I1)
-                fhsR2["unassigned_I1"].write(qual_I1)
+                fhsR1["unassigned_I1"].stdin.write(readID_I1)
+                fhsR2["unassigned_I1"].stdin.write(seq_I1+"\n")
+                fhsR2["unassigned_I1"].stdin.write(line3_I1)
+                fhsR2["unassigned_I1"].stdin.write(qual_I1)
 
                 if double_coded:
-                    fhsR1["unassigned_I2"].write(readID_I2)
-                    fhsR1["unassigned_I2"].write(seq_I2+"\n")
-                    fhsR1["unassigned_I2"].write(line3_I2)
-                    fhsR1["unassigned_I2"].write(qual_I2)
+                    fhsR1["unassigned_I2"].stdin.write(readID_I2)
+                    fhsR1["unassigned_I2"].stdin.write(seq_I2+"\n")
+                    fhsR1["unassigned_I2"].stdin.write(line3_I2)
+                    fhsR1["unassigned_I2"].stdin.write(qual_I2)
 
                 if paired_end:
-                    fhsR2["unassigned"].write(readID_R2+"\n")
-                    fhsR2["unassigned"].write(seq_R2)
-                    fhsR2["unassigned"].write(line3_R2)
-                    fhsR2["unassigned"].write(qual_R2)
+                    fhsR2["unassigned"].stdin.write(readID_R2+"\n")
+                    fhsR2["unassigned"].stdin.write(seq_R2)
+                    fhsR2["unassigned"].stdin.write(line3_R2)
+                    fhsR2["unassigned"].stdin.write(qual_R2)
                     
 
             line_count += 1
