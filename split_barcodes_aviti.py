@@ -252,9 +252,9 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 fhsR1["unassigned"].stdin.write(qual_R1)
 
                 fhsR1["unassigned_I1"].stdin.write(readID_I1)
-                fhsR2["unassigned_I1"].stdin.write(seq_I1+"\n")
-                fhsR2["unassigned_I1"].stdin.write(line3_I1)
-                fhsR2["unassigned_I1"].stdin.write(qual_I1)
+                fhsR1["unassigned_I1"].stdin.write(seq_I1+"\n")
+                fhsR1["unassigned_I1"].stdin.write(line3_I1)
+                fhsR1["unassigned_I1"].stdin.write(qual_I1)
 
                 if double_coded:
                     fhsR1["unassigned_I2"].stdin.write(readID_I2)
