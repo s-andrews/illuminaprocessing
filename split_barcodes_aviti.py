@@ -304,10 +304,16 @@ def open_filehandlesR2(fname, sample_level_barcode, path_from_run_folder):
     fhsR2[sample_level_barcode] = subprocess.Popen(f"/usr/bin/gzip -4 > {outfile}",encoding="utf8", stdin=subprocess.PIPE, shell=True)
 
 def close_filehandles():
-	for name in fhsR1.keys():
-		fhsR1[name].stdin.close() 
-	for name in fhsR2.keys():
-		fhsR2[name].stdin.close() 
+    for name in fhsR1.keys():
+        if name == "log":
+            fhsR1[name].close()
+        else:
+            fhsR1[name].stdin.close() 
+    for name in fhsR2.keys():
+        if name == "log":
+            fhsR2[name].close()
+        else:
+            fhsR2[name].stdin.close() 
 
 
 def reverse_complement(dna_seq):
