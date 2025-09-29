@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # This script takes in a fastq file which contains embedded barcodes
 # and lists the most frequently observed combinations
 #
@@ -7,30 +8,32 @@ import sys
 import gzip
 
 def main():
-    filename = sys.argv[1]
+    filenames = sys.argv[1:]
 
     seen_barcodes = {}
-    count = 0
 
-    with gzip.open(filename, "rt", encoding="UTF-8") as fh:
-        for line in fh:
-            x = fh.readline()
-            x = fh.readline()
-            x = fh.readline()
+    for filename in filenames:
+        print("Reading",filename, flush=True, file=sys.stderr)
+        count = 0
+        with gzip.open(filename, "rt", encoding="UTF-8") as fh:
+            for line in fh:
+                x = fh.readline()
+                x = fh.readline()
+                x = fh.readline()
 
-            barcodes = line.strip().split(":")[-1]
+                barcodes = line.strip().split(":")[-1]
 
-            if not barcodes in seen_barcodes:
-                seen_barcodes[barcodes] = 0
+                if not barcodes in seen_barcodes:
+                    seen_barcodes[barcodes] = 0
 
-            seen_barcodes[barcodes] += 1
+                seen_barcodes[barcodes] += 1
 
-            count += 1
-            if count % 1000000 == 0:
-                print ("Processed",int(count/1000000),"million")
+                count += 1
+                if count % 1000000 == 0:
+                    print ("Processed",int(count/1000000),"million", flush=True, file=sys.stderr)
 
-            if count % 10000000 == 0:
-                break
+                # if count % 10000000 == 0:
+                #     break
 
 
     sorted_barcodes = sorted(seen_barcodes.keys(), key=lambda x: seen_barcodes[x])
