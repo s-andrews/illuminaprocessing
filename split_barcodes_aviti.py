@@ -10,7 +10,7 @@ import argparse
 from argparse import RawTextHelpFormatter
 from datetime import datetime
 
-transtable = str.maketrans({"GATC","CTAG"})
+transtable = str.maketrans("GATC","CTAG")
 
 # line 121 - change for processing a full file vs first few lines
 
