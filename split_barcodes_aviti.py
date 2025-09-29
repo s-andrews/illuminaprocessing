@@ -10,6 +10,8 @@ import argparse
 from argparse import RawTextHelpFormatter
 from datetime import datetime
 
+transtable = str.maketrans({"GATC","CTAG"})
+
 # line 121 - change for processing a full file vs first few lines
 
 #  ssub -j CS_splitting_full -e split.err -o split.out ../../split_barcodes.py --i1_trim 3 --i1_revcomp --i2_revcomp 20250529_AV240405_AV_B_CS6236_SE150_29052025
@@ -138,14 +140,14 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
     print("opened all the file handles")
 
-    r1 = gzip.open(R1)
-    i1 = gzip.open(I1)
+    r1 = gzip.open(R1, "rt", encoding="utf8")
+    i1 = gzip.open(I1, "rt", encoding="uff8")
 
     if paired_end:
-        r2 = gzip.open(R2)
+        r2 = gzip.open(R2, "rt", encoding="utf8")
 
     if double_coded:
-        i2 = gzip.open(I2)
+        i2 = gzip.open(I2, "rt", encoding="utf8")
 
     try:
 		# unpaired_count = 0 # count the number of R2 barcodes that don't match R1
@@ -156,10 +158,10 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
         while True:
         #while line_count <= 400: 
-            readID_R1  = r1.readline().decode().strip()
-            seq_R1     = r1.readline().decode().strip()
-            line3_R1   = r1.readline().decode().strip()
-            qual_R1    = r1.readline().decode().strip()
+            readID_R1  = r1.readline().strip()
+            seq_R1     = r1.readline()
+            line3_R1   = r1.readline()
+            qual_R1    = r1.readline()
 
             shortID_R1 = readID_R1.split(" ")[0]
 			
@@ -167,17 +169,17 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 break
 			
             if paired_end:
-                readID_R2  = r2.readline().decode().strip()
-                seq_R2     = r2.readline().decode().strip()
-                line3_R2   = r2.readline().decode().strip()
-                qual_R2    = r2.readline().decode().strip()
+                readID_R2  = r2.readline().strip()
+                seq_R2     = r2.readline()
+                line3_R2   = r2.readline()
+                qual_R2    = r2.readline()
                 #shortID_R2 = readID_R2.split(" ")[0]
 
-            readID_I1  = i1.readline().decode().strip()
-            seq_I1     = i1.readline().decode().strip()
-            line3_I1   = i1.readline().decode().strip()
-            qual_I1    = i1.readline().decode().strip()
-            shortID_I1 = readID_I1.split(" ")[0]
+            readID_I1  = i1.readline()
+            seq_I1     = i1.readline().strip()
+            line3_I1   = i1.readline()
+            qual_I1    = i1.readline()
+            shortID_I1 = readID_I1.split(" ")[0].strip()
 
             if I1_trim > 0:
                 seq_I1 = seq_I1[I1_trim:]
@@ -196,11 +198,11 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 seq_I1 = seq_I1[0:barcode_length]
 
             if double_coded:
-                readID_I2  = i2.readline().decode().strip()
-                seq_I2     = i2.readline().decode().strip()
-                line3_I2   = i2.readline().decode().strip()
-                qual_I2    = i2.readline().decode().strip()
-                shortID_I2 = readID_I2.split(" ")[0]
+                readID_I2  = i2.readline()
+                seq_I2     = i2.readline().strip()
+                line3_I2   = i2.readline()
+                qual_I2    = i2.readline()
+                #shortID_I2 = readID_I2.split(" ")[0].strip()
 
                 if I2_revcomp:
                     seq_I2 = reverse_complement(seq_I2)
@@ -218,8 +220,10 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 if i1_umi and barcode_length > 0:
                     readID_R1 += f':{umi}'
 
-                fhsR1[barcode].write (("\n".join([readID_R1, seq_R1, line3_R1, qual_R1]) + "\n").encode())
-
+                fhsR1[barcode].write(readID_R1+"\n")
+                fhsR1[barcode].write(seq_R1)
+                fhsR1[barcode].write(line3_R1)
+                fhsR1[barcode].write(qual_R1)
 
                 if paired_end:
                     readID_R2 = f"{readID_R2} {barcode}"
@@ -227,20 +231,37 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                     if i1_umi and barcode_length > 0:
                         readID_R2 += f':{umi}'
 
-                    fhsR2[barcode].write (("\n".join([readID_R2, seq_R2, line3_R2, qual_R2]) + "\n").encode())
+                    fhsR2[barcode].write(readID_R2+"\n")
+                    fhsR2[barcode].write(seq_R2)
+                    fhsR2[barcode].write(line3_R2)
+                    fhsR2[barcode].write(qual_R2)
 
             else:
                 #print(f"Couldn't find this {barcode}")
                 unassigned_count +=1
-                fhsR1["unassigned"].write (("\n".join([readID_R1, seq_R1, line3_R1, qual_R1]) + "\n").encode())
-                fhsR1["unassigned_I1"].write (("\n".join([readID_I1, seq_I1, line3_I1, qual_I1]) + "\n").encode())
+
+                fhsR1["unassigned"].write(readID_R1+"\n")
+                fhsR1["unassigned"].write(seq_R1)
+                fhsR1["unassigned"].write(line3_R1)
+                fhsR1["unassigned"].write(qual_R1)
+
+                fhsR1["unassigned_I1"].write(readID_I1)
+                fhsR2["unassigned_I1"].write(seq_I1+"\n")
+                fhsR2["unassigned_I1"].write(line3_I1)
+                fhsR2["unassigned_I1"].write(qual_I1)
 
                 if double_coded:
-                    fhsR1["unassigned_I2"].write (("\n".join([readID_I2, seq_I2, line3_I2, qual_I2]) + "\n").encode())
+                    fhsR1["unassigned_I2"].write(readID_I2)
+                    fhsR1["unassigned_I2"].write(seq_I2+"\n")
+                    fhsR1["unassigned_I2"].write(line3_I2)
+                    fhsR1["unassigned_I2"].write(qual_I2)
 
                 if paired_end:
-                    fhsR2["unassigned"].write (("\n".join([readID_R2, seq_R2, line3_R2, qual_R2]) + "\n").encode())
-
+                    fhsR2["unassigned"].write(readID_R2+"\n")
+                    fhsR2["unassigned"].write(seq_R2)
+                    fhsR2["unassigned"].write(line3_R2)
+                    fhsR2["unassigned"].write(qual_R2)
+                    
 
             line_count += 1
 
@@ -286,17 +307,9 @@ def close_filehandles():
 
 def reverse_complement(dna_seq):
     """Return the reverse complement of a DNA sequence."""
-    # Create a mapping of each nucleotide to its complement
-    complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C', 'N': 'N'}
     
     # Convert the sequence to uppercase to handle mixed case input
-    dna_seq = dna_seq.upper()
-    
-    # Compute the complement and then reverse it
-    try:
-        rev_comp = ''.join(complement[base] for base in reversed(dna_seq))
-    except KeyError as e:
-        raise ValueError(f"Invalid nucleotide found in sequence: {e}")
+    rev_comp = dna_seq.upper().translate(transtable)[::-1]
 
     return rev_comp
 
