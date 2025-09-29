@@ -141,7 +141,7 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
     print("opened all the file handles")
 
     r1 = gzip.open(R1, "rt", encoding="utf8")
-    i1 = gzip.open(I1, "rt", encoding="uff8")
+    i1 = gzip.open(I1, "rt", encoding="utf8")
 
     if paired_end:
         r2 = gzip.open(R2, "rt", encoding="utf8")
