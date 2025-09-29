@@ -305,9 +305,9 @@ def open_filehandlesR2(fname, sample_level_barcode, path_from_run_folder):
 
 def close_filehandles():
 	for name in fhsR1.keys():
-		fhsR1[name].stdout.close() 
+		fhsR1[name].stdin.close() 
 	for name in fhsR2.keys():
-		fhsR2[name].stdout.close() 
+		fhsR2[name].stdin.close() 
 
 
 def reverse_complement(dna_seq):
