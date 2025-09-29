@@ -9,6 +9,7 @@ import re
 import argparse
 from argparse import RawTextHelpFormatter
 from datetime import datetime
+import traceback
 
 transtable = str.maketrans("GATC","CTAG")
 
@@ -89,6 +90,7 @@ def main():
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!  Is the run folder correct? {run_folder}")
         print(err)
+        print(traceback.format_exc())
 
     close_filehandles()
     print(datetime.now())
