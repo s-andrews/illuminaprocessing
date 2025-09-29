@@ -157,6 +157,10 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
         assigned_count = 0
 
         while True:
+
+            if line_count % 100000 == 0:
+                print("Read",line_count,"entries")
+
         #while line_count <= 400: 
             readID_R1  = r1.readline().strip()
             seq_R1     = r1.readline()
@@ -291,12 +295,13 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 def open_filehandlesR1(fname, sample_level_barcode, path_from_run_folder):
 	#print (f"Opening filehandle for {sample_level_barcode} and {fname}")
     outfile = f"{path_from_run_folder}{fname}"
-    fhsR1[sample_level_barcode] = gzip.open (outfile,mode='wb',compresslevel=3)
-
+#    fhsR1[sample_level_barcode] = gzip.open (outfile,mode='wb',compresslevel=3)
+    fhsR1[sample_level_barcode] = subprocess.Popen(f"/usr/bin/gzip -4 > {outfile}",encoding="utf8", stdin=subprocess.PIPE, shell=True)
 def open_filehandlesR2(fname, sample_level_barcode, path_from_run_folder):
 	#print (f"Opening filehandle for {sample_level_barcode} and {fname}")
     outfile = f"{path_from_run_folder}{fname}"
-    fhsR2[sample_level_barcode] = gzip.open(outfile,mode='wb',compresslevel=3)
+    #fhsR2[sample_level_barcode] = gzip.open(outfile,mode='wb',compresslevel=3)
+    fhsR2[sample_level_barcode] = subprocess.Popen(f"/usr/bin/gzip -4 > {outfile}",encoding="utf8", stdin=subprocess.PIPE, shell=True)
 
 def close_filehandles():
 	for name in fhsR1.keys():
