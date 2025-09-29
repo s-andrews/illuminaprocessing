@@ -160,8 +160,8 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
 
         while True:
 
-            if line_count % 100000 == 0:
-                print("Read",line_count,"entries")
+            if line_count % 1000000 == 0:
+                print("Read",(line_count/1000000),"million entries")
 
         #while line_count <= 400: 
             readID_R1  = r1.readline().strip()
