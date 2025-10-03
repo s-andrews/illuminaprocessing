@@ -1,6 +1,9 @@
 library(dplyr)
 library(ggplot2)
 
+# Usage:  Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder]
+# It shouldn't matter where the script is run from (as long as it's run on the pipeline server)
+
 cmd_args <- commandArgs(trailingOnly = TRUE)
 #print(cmd_args)
 run_folder <- cmd_args[1]
@@ -62,7 +65,7 @@ all <- exp |>
   mutate(barlabel = reorder(barlabel, percentage))
 
 # write out data before filtering in case extra barcodes are useful
-textout <- "barcode_L001_plot_data.txt"
+textout <- paste0(barcode_folder, "barcode_L001_plot_data.txt")
 outdata <- dplyr::select(all, -barlabel)
 readr::write_tsv(outdata, file = textout)  
 
@@ -77,7 +80,8 @@ all_filt <- all |>
 
 bar_colours <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", missing = "grey")
 bar_outer <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", missing = "#e6308a")
-outfile <- "barcode_L001_plot.png"
+
+outfile <- paste0(barcode_folder, "barcode_L001_plot.png")
 
 percentage_of_all_data <- round(sum(all_filt$percentage), digits = 0)
 plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of the first million sequences")
