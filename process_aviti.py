@@ -109,12 +109,10 @@ def rename_fastqs(run_folder):
         os.chdir(run_folder) 
 
         if split_lanes:
-            rename_cmd1 = "rename DefaultSample_ lane1_NoIndex_ Unaligned/Samples/DefaultProject/DefaultSample/*L001*fastq.gz"        
+            rename_cmd1 = "rename DefaultSample_L lane1_NoIndex_L00 Unaligned/Samples/DefaultProject/DefaultSample/*L1*fastq.gz"        
             subprocess.run(rename_cmd1, shell=True, executable="/bin/bash")
-            rename_cmd2 = "rename DefaultSample_ lane2_NoIndex_ Unaligned/Samples/DefaultProject/DefaultSample/*L002*fastq.gz"
-            subprocess.run(rename_cmd2, shell=True, executable="/bin/bash")
-            rename_cmd3 = "rename _001.fastq .fastq Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz"	
-            subprocess.run(rename_cmd3, shell=True, executable="/bin/bash")
+            rename_cmd2 = "rename DefaultSample_L lane2_NoIndex_L00 Unaligned/Samples/DefaultProject/DefaultSample/*L2*fastq.gz"
+            subprocess.run(rename_cmd2, shell=True, executable="/bin/bash")           
         else:
             rename_cmd = "rename DefaultSample_ lane1_NoIndex_L001_ Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz"
             subprocess.run(rename_cmd, shell=True, executable="/bin/bash")
