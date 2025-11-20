@@ -1,17 +1,34 @@
 library(dplyr)
 library(ggplot2)
 
-# Usage:  Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder]
+# Usage:  Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder] [lane]
+# lane is optional - can only be 1 or 2 (default: 1)
 # It shouldn't matter where the script is run from (as long as it's run on the pipeline server)
 
 cmd_args <- commandArgs(trailingOnly = TRUE)
 #print(cmd_args)
 run_folder <- cmd_args[1]
+
 print(paste0("run folder is ", run_folder))
+
+if (! file.exists(paste0("/primary/", run_folder))) {
+    stop("Couldn't find run folder in /primary")
+}
+
+selected_lane <- cmd_args[2]
+#print(paste0("selected lane is ", selected_lane))
+# lane can only be 1 or 2, default is 1
+lane <- dplyr::case_when(
+    is.na(selected_lane) ~ 1,
+    selected_lane == 2 ~ 2,
+    .default = 1
+)
+print(paste0("checking barcodes for lane ", lane))
 
 n_seqs_checked <- 1000000
 
-barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
+#barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
+barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane", lane, "/")
 
 phiX_bc1 <- c("ATGTCGCT", "GCACATAG", "TGTGTCGA", "CACAGATC")
 phiX_bc1_6 <- c("ATGTCG", "GCACAT", "TGTGTC", "CACAGA")
@@ -21,6 +38,14 @@ phiX_dual6_8 <- c("ATGTCG_CTAGCTCG", "GCACAT_GACTACTA", "TGTGTC_TGTCTGAC", "CACA
 
 exp_file <- paste0(barcode_folder, "expected_barcodes.txt")
 found_file <- paste0(barcode_folder, "found_barcodes.txt")
+
+if (! file.exists(exp_file)) {
+    stop("File of expected barcodes wasn't found.")
+}
+
+if (! file.exists(found_file)) {
+    stop("File of found barcodes wasn't located.")
+}
 
 exp <- readr::read_csv(file=exp_file, col_names = c("bc1", "bc2", "name"))
 found <- readr::read_delim(found_file, col_names = c("count", "bc")) |>
@@ -65,7 +90,7 @@ all <- exp |>
   mutate(barlabel = reorder(barlabel, percentage))
 
 # write out data before filtering in case extra barcodes are useful
-textout <- paste0(barcode_folder, "barcode_L001_plot_data.txt")
+textout <- paste0(barcode_folder, "barcode_L00", lane, "_plot_data.txt")
 outdata <- dplyr::select(all, -barlabel)
 readr::write_tsv(outdata, file = textout)  
 
@@ -81,7 +106,7 @@ all_filt <- all |>
 bar_colours <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", missing = "grey")
 bar_outer <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", missing = "#e6308a")
 
-outfile <- paste0(barcode_folder, "barcode_L001_plot.png")
+outfile <- paste0(barcode_folder, "barcode_L00", lane, "_plot.png")
 
 percentage_of_all_data <- round(sum(all_filt$percentage), digits = 0)
 plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of the first million sequences")

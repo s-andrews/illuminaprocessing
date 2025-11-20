@@ -7,10 +7,10 @@ import argparse
 from argparse import RawTextHelpFormatter
 
 # currently needs to be run from /data/AV240405
-# we might move to running it from /data when we make it compatible with MiSeq as well.
 # nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
 
 # barcode checking only works for lane1 at the moment
+# It might be useful to extract the barcode checking out of this so that it could be run as a standalone script.
 
 n_fastq_lines = 4000000 # 1 million sequences
 
@@ -33,36 +33,51 @@ def main():
     # rename fastq files to be Sierra compatible
     rename_fastqs(run_folder)
 
-    # create directry structure on /primary
+    # create directory structure on /primary
     create_dirs_primary(run_folder)
 
     # copy fastq files to /primary
+    print(f"copying fastq files to /primary/{run_folder}, this may take a while....")
     cp_to_primary(run_folder)
     print(f"fastq files have been copied to /primary/{run_folder}....")
-
-    # quick barcode check
-    barcode1_count = get_expected_barcodes(run_folder)
-    n_bars_to_check = str(barcode1_count+10)
-
-    get_barcodes_I1(run_folder)
-
-    I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
-    if os.path.exists(I2_file):
-        dual_coded = True
-        get_barcodes_I2(run_folder)
-        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
-    else:
-        print("Single indexed library")
-        dual_coded = False
-        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
+    print("Now running barcode check....")
 
     try:
-        R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
-        subprocess.run(R_cmd, shell=True, executable="/bin/bash")
+        bc_cmd = f"/home/sbsuser/illuminaprocessing/check_barcodes.py {run_folder} --lane 1"
+        subprocess.run(bc_cmd, shell=True, executable="/bin/bash")
+
+        if split_lanes:
+            bc_cmd2 = f"/home/sbsuser/illuminaprocessing/check_barcodes.py {run_folder} --lane 2"
+            subprocess.run(bc_cmd2, shell=True, executable="/bin/bash")
 
     except Exception as err:
-        print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
+        print(f"\n !! Couldn't run check_barcodes.py on {run_folder} !!")
         print(err)
+
+
+    # quick barcode check
+    # barcode1_count = get_expected_barcodes(run_folder)
+    # n_bars_to_check = str(barcode1_count+10)
+
+    # get_barcodes_I1(run_folder)
+
+    # I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
+    # if os.path.exists(I2_file):
+    #     dual_coded = True
+    #     get_barcodes_I2(run_folder)
+    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
+    # else:
+    #     print("Single indexed library")
+    #     dual_coded = False
+    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
+
+    # try:
+    #     R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
+    #     subprocess.run(R_cmd, shell=True, executable="/bin/bash")
+
+    # except Exception as err:
+    #     print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
+    #     print(err)
 
     print("\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
 
