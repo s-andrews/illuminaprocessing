@@ -6,17 +6,20 @@ import mysql.connector
 import argparse
 from argparse import RawTextHelpFormatter
 
+transtable = str.maketrans("GATC","CTAG")
+
 # can be run from anywhere on the pipeline server
 # ~/illuminaprocessing/check_barcodes.py [run_folder] --lane [1/2] > barcode.log
 
-# TODO: add an option to pass in a barcode sheet instead of using barcodes from Sierra.
+# TODO: Add a note to the log/flag somewhere if seqs have been reverse complemented
 
 n_fastq_lines = 4000000 # 1 million sequences
 
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''Checks the first million barcodes and runs an R script to create a barcode plot.''')
 parser.add_argument('run_folder', type=str, default="", help='run folder name')
 parser.add_argument('--lane', type=str, default="1", help='lane number, must be 1 or 2. Default 1')
-#parser.add_argument('--sample_sheet', type=str, default="", help='[Optional] Tab delimited barcode sheet "First_barcode\tSecond_barcode\tDescription\tLane". Lane should be 1 or 2. Sample sheet will be pulled from Sierra by default')
+parser.add_argument('--i1_revcomp', default=False, action='store_true', help='Reverse complement the I1 sequence')
+parser.add_argument('--i2_revcomp', default=False, action='store_true', help='Reverse complement the I2 sequence')
 parser.add_argument('--no_sierra_bc', default=False, action='store_true', help='''Do not pull barcodes from Sierra. 
     If this flag is used, a file named expected_barcodes.txt should be present in /Unaligned/Project_External/Sample_laneX in the format bc1,bc2,name''')
 
@@ -25,6 +28,8 @@ args=parser.parse_args()
 run_folder = args.run_folder
 lane_no = args.lane
 no_Sierra_bc = args.no_sierra_bc
+I1_revcomp = args.i1_revcomp
+I2_revcomp = args.i2_revcomp
 
 def main():
 
@@ -45,12 +50,12 @@ def main():
 
     n_bars_to_check = str(bc_count+10)
 
-    get_barcodes_I1(run_folder, lane_no)
+    get_barcodes_I1(run_folder, lane_no, I1_revcomp)
 
     I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane{lane_no}/lane{lane_no}_NoIndex_L00{lane_no}_I2.fastq.gz"
     if os.path.exists(I2_file):
         dual_coded = True
-        get_barcodes_I2(run_folder, lane_no)
+        get_barcodes_I2(run_folder, lane_no, I2_revcomp)
         sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
     else:
         print("Single indexed library")
@@ -72,11 +77,15 @@ def main():
 #---------------------
 # quick barcode check
 #---------------------
-def get_barcodes_I1(run_folder, lane_no):
+def get_barcodes_I1(run_folder, lane_no, revcomp):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane{lane_no}/")
-        bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' > i1_head.txt"
+
+        if revcomp:
+            bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' | tr 'ATCG' 'TAGC' | rev > i1_head.txt"
+        else:
+            bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' > i1_head.txt"
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -93,11 +102,15 @@ def get_barcodes_I1(run_folder, lane_no):
 #---------------------
 # quick barcode check
 #---------------------
-def get_barcodes_I2(run_folder, lane_no):
+def get_barcodes_I2(run_folder, lane_no, revcomp):
 
     try:
         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane{lane_no}/")
-        bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' > i2_head.txt"    
+        
+        if revcomp:
+            bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' | tr 'ATCG' 'TAGC' | rev > i2_head.txt"    
+        else:
+            bc_check_cmd = f"zcat lane{lane_no}_NoIndex_L00{lane_no}_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' > i2_head.txt"    
 
         try:
             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
@@ -109,6 +122,7 @@ def get_barcodes_I2(run_folder, lane_no):
     except Exception as err:
         print("\n !! Couldn't run barcode checking command !!")
         print(err)
+
 
 #---------------------
 # sort top barcodes
