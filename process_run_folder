@@ -154,7 +154,7 @@ sub backup_run{
 
 			warn "Now backing up $run_folder\n";
 
-			my $command = "tar cf - $run_folder --exclude=$run_folder/Data* --exclude=Temp --exclude=Thumbnail_Images --exclude=*.cif --exclude=*.bcl --exclude=*_pos.txt --exclude=*.clocs --exclude=$run_folder/Images* | (cd /primary/ && tar xfp -)";
+			my $command = "tar -c  --exclude=$run_folder/Data* --exclude=Temp --exclude=Thumbnail_Images --exclude=*.cif --exclude=*.bcl --exclude=*_pos.txt --exclude=*.clocs --exclude=$run_folder/Images* -f - $run_folder | (cd /primary/ && tar xfp -)";
 			$verbose and warn "Running command\n$command\n";
 			system($command) == 0 or die "Failed to back up $run_folder\n";
 	}
