@@ -25,7 +25,7 @@ lane <- dplyr::case_when(
 )
 print(paste0("checking barcodes for lane ", lane))
 
-n_seqs_checked <- 1000000
+n_seqs_checked <- 10000000
 
 #barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
 barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane", lane, "/")
@@ -109,7 +109,8 @@ bar_outer <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", mi
 outfile <- paste0(barcode_folder, "barcode_L00", lane, "_plot.png")
 
 percentage_of_all_data <- round(sum(all_filt$percentage), digits = 0)
-plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of the first million sequences")
+plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of first 10 million reads")
+#plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of all sequences")
 
 p <- all_filt |>
   ggplot(aes(x = barlabel, y = percentage, fill = status, colour = status)) +
