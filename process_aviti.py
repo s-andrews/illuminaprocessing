@@ -17,10 +17,10 @@ from argparse import RawTextHelpFormatter
 # paste -d '_' i1_head_trimmed.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n 110 | sed 's/^\s*//' > found_barcodes.txt
 # re-run plotting script
 
-n_fastq_lines = 4000000 # 1 million sequences
+n_fastq_lines = 40000000 # 10 million sequences
 
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''For initial processing of AVITI data - this runs bases2fastq, 
-copies fastq files to /primary, checks the first million barcodes and runs an R script to create a barcode plot.''')
+copies fastq files to /primary, checks the first 10 million barcodes and runs an R script to create a barcode plot.''')
 parser.add_argument('run_folder', type=str, default="", help='run folder name')
 parser.add_argument('--ignore_R2', default=False, action='store_true', help='To only use R1 cycles. Default [False]')
 parser.add_argument('--filter_mask_R2', default=False, action='store_true', help='Do not use R2 cycles to determine if a read passes the filter. Default [False]')
