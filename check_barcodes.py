@@ -13,9 +13,9 @@ transtable = str.maketrans("GATC","CTAG")
 
 # TODO: Add a note to the log/flag somewhere if seqs have been reverse complemented
 
-n_fastq_lines = 4000000 # 1 million sequences
+n_fastq_lines = 40000000 # 10 million sequences
 
-parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''Checks the first million barcodes and runs an R script to create a barcode plot.''')
+parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''Checks the first 10 million barcodes and runs an R script to create a barcode plot.''')
 parser.add_argument('run_folder', type=str, default="", help='run folder name')
 parser.add_argument('--lane', type=str, default="1", help='lane number, must be 1 or 2. Default 1')
 parser.add_argument('--i1_revcomp', default=False, action='store_true', help='Reverse complement the I1 sequence')
