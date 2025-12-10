@@ -6,6 +6,8 @@ import mysql.connector
 import argparse
 from argparse import RawTextHelpFormatter
 
+# TODO: The barcode checking code has been copied from here to check_barcodes.py, so we should remove the code from here and call that.
+
 # currently needs to be run from /data/AV240405
 # we might move to running it from /data when we make it compatible with MiSeq as well.
 # nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
@@ -47,31 +49,41 @@ def main():
     cp_to_primary(run_folder)
     print(f"fastq files have been copied to /primary/{run_folder}....")
 
+
+    print("Now running barcode check...")
+
+    barcode_cmd = f"/home/sbsuser/illuminaprocessing/check_barcodes.py {run_folder}"
+    subprocess.run(barcode_cmd , shell=True, executable="/bin/bash")
+
+    if split_lanes: 
+        barcode_cmd = f"/home/sbsuser/illuminaprocessing/check_barcodes.py --lane 2 {run_folder}"
+        subprocess.run(barcode_cmd , shell=True, executable="/bin/bash")
+
     # quick barcode check
-    barcode1_count = get_expected_barcodes(run_folder)
-    n_bars_to_check = str(barcode1_count+10)
+   # barcode1_count = get_expected_barcodes(run_folder)
+   # n_bars_to_check = str(barcode1_count+10)
 
-    get_barcodes_I1(run_folder)
+    # get_barcodes_I1(run_folder)
 
-    I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
-    if os.path.exists(I2_file):
-        dual_coded = True
-        get_barcodes_I2(run_folder)
-        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
-    else:
-        print("Single indexed library")
-        dual_coded = False
-        sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
+    # I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
+    # if os.path.exists(I2_file):
+    #     dual_coded = True
+    #     get_barcodes_I2(run_folder)
+    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
+    # else:
+    #     print("Single indexed library")
+    #     dual_coded = False
+    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
 
-    try:
-        R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
-        subprocess.run(R_cmd, shell=True, executable="/bin/bash")
+    # try:
+    #     R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
+    #     subprocess.run(R_cmd, shell=True, executable="/bin/bash")
 
-    except Exception as err:
-        print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
-        print(err)
+    # except Exception as err:
+    #     print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
+    #     print(err)
 
-    print("\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
+    # print("\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
 
 
 #--------------------------------
@@ -125,12 +137,12 @@ def rename_fastqs(run_folder):
         os.chdir(run_folder) 
 
         if split_lanes:
-            rename_cmd1 = "rename DefaultSample_ lane1_NoIndex_ Unaligned/Samples/DefaultProject/DefaultSample/*L001*fastq.gz"        
+            rename_cmd1 = "rename DefaultSample_L1_ lane1_NoIndex_L001_ Unaligned/Samples/DefaultProject/DefaultSample/*L1*fastq.gz"        
             subprocess.run(rename_cmd1, shell=True, executable="/bin/bash")
-            rename_cmd2 = "rename DefaultSample_ lane2_NoIndex_ Unaligned/Samples/DefaultProject/DefaultSample/*L002*fastq.gz"
+            rename_cmd2 = "rename DefaultSample_L2_ lane2_NoIndex_L002_ Unaligned/Samples/DefaultProject/DefaultSample/*L2*fastq.gz"
             subprocess.run(rename_cmd2, shell=True, executable="/bin/bash")
-            rename_cmd3 = "rename _001.fastq .fastq Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz"	
-            subprocess.run(rename_cmd3, shell=True, executable="/bin/bash")
+            #rename_cmd3 = "rename _001.fastq .fastq Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz"	
+            #subprocess.run(rename_cmd3, shell=True, executable="/bin/bash")
         else:
             rename_cmd = "rename DefaultSample_ lane1_NoIndex_L001_ Unaligned/Samples/DefaultProject/DefaultSample/*fastq.gz"
             subprocess.run(rename_cmd, shell=True, executable="/bin/bash")
