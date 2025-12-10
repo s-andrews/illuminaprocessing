@@ -80,7 +80,7 @@ def main():
 
         expected_barcodes = expected_barcodes_list[0]
         double_coded = expected_barcodes_list[1]
-        lane_id = expected_barcodes_list[2] # this is the lane id - not 1 or 2
+        lane_id = expected_barcodes_list[2] # this is the lane id - not 1 or 2 # but it breaks and returns 1 or 2 if we're using a custom barcode file - we still need to get the lane id properly.
         print(f"barcodes are {expected_barcodes}. \nIs this a double coded library? {double_coded}")
         print(f"lane ID is {lane_id}.")
         print(f"lane number is {lane_number}.")
@@ -379,6 +379,20 @@ def get_expected_barcodes_sample_sheet(run_folder, lane_number, sample_sheet):
                     
                 barcode_dict[barcode_seq] = sample_name
                 count += 1
+
+
+        # get the lane ID
+        query = (
+            f"select lane.id from run,flowcell,lane,barcode " 
+            f"WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id " 
+            f"AND lane.lane_number='{lane_number}' AND lane.sample_id = barcode.sample_id"
+        )
+        cnx = mysql.connector.connect(user='sierrauser', password='', host='bilin2.babraham.ac.uk', database='sierra')
+        cursor = cnx.cursor()
+        cursor.execute(query)
+
+        for (row) in cursor:
+            lane = row[0].strip()
 
         return([barcode_dict, double_coded, lane])
 
