@@ -27,6 +27,7 @@ parser.add_argument('run_folder', type=str, default="", help='run folder name')
 parser.add_argument('--ignore_R2', default=False, action='store_true', help='To only use R1 cycles. Default [False]')
 parser.add_argument('--filter_mask_R2', default=False, action='store_true', help='Do not use R2 cycles to determine if a read passes the filter. Default [False]')
 parser.add_argument('--split_lanes', default=False, action='store_true', help='If lane1 and lane2 need to be kept separate. Cannot currently be used with --ignore_R2. Default [False]')
+parser.add_argument('--no_trim', default=False, action='store_true', help='Do not remove the final base. By default, the final cycle is not used. Default [False]')
 
 args=parser.parse_args()
 
@@ -34,10 +35,16 @@ run_folder = args.run_folder
 ignore_R2 = args.ignore_R2
 filter_mask_R2 = args.filter_mask_R2
 split_lanes = args.split_lanes
+no_trim = args.no_trim
 
 def main():
 
-    run_bases2fastq(run_folder)
+    if no_trim:
+        run_manifest = "~/illuminaprocessing/aviti_run_manifest_all_bases.csv"
+    else:
+        run_manifest = "~/illuminaprocessing/aviti_run_manifest.csv"
+
+    run_bases2fastq(run_folder, run_manifest)
 
     # rename fastq files to be Sierra compatible
     rename_fastqs(run_folder)
@@ -59,38 +66,13 @@ def main():
         barcode_cmd = f"/home/sbsuser/illuminaprocessing/check_barcodes.py --lane 2 {run_folder}"
         subprocess.run(barcode_cmd , shell=True, executable="/bin/bash")
 
-    # quick barcode check
-   # barcode1_count = get_expected_barcodes(run_folder)
-   # n_bars_to_check = str(barcode1_count+10)
-
-    # get_barcodes_I1(run_folder)
-
-    # I2_file = f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/lane1_NoIndex_L001_I2.fastq.gz"
-    # if os.path.exists(I2_file):
-    #     dual_coded = True
-    #     get_barcodes_I2(run_folder)
-    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
-    # else:
-    #     print("Single indexed library")
-    #     dual_coded = False
-    #     sort_top_barcodes(run_folder, n_bars_to_check, dual_coded)
-
-    # try:
-    #     R_cmd = f"Rscript /home/sbsuser/illuminaprocessing/barcode_ggplot.R {run_folder}"
-    #     subprocess.run(R_cmd, shell=True, executable="/bin/bash")
-
-    # except Exception as err:
-    #     print(f"\n !! Couldn't run barcode plot script barcode_ggplot.R on {run_folder} !!")
-    #     print(err)
-
-    # print("\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
 
 
 #--------------------------------
 # run_bases2fastq for AVITI data
 #--------------------------------
 
-def run_bases2fastq(run_folder):
+def run_bases2fastq(run_folder, run_manifest):
 
     try:
         if os.path.exists(run_folder):
@@ -107,14 +89,13 @@ def run_bases2fastq(run_folder):
         base_cmd = "bases2fastq -p 16"
 
         if split_lanes:
-            #bases2fastq_cmd = f"bases2fastq -p 16 --split-lanes --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv {run_folder} {run_folder}/Unaligned"
             base_cmd = f"{base_cmd} --split-lanes"
         if ignore_R2:
             base_cmd = f"{base_cmd} --r2-cycles 0"
         if filter_mask_R2:
             base_cmd = f"{base_cmd} --filter-mask R1:Y15N*-R2:N*"
 
-        bases2fastq_cmd = f"{base_cmd} --run-manifest ~/illuminaprocessing/aviti_run_manifest.csv {run_folder} {run_folder}/Unaligned"
+        bases2fastq_cmd = f"{base_cmd} --run-manifest {run_manifest} {run_folder} {run_folder}/Unaligned"
         # elif ignore_R2:
         #     # do we really need --r2-cycles and a custom manifest? I don't think so, will try without this.
         #     bases2fastq_cmd = f"bases2fastq -p 16 --r2-cycles 0 --run-manifest ~/illuminaprocessing/aviti_run_manifest_exclude_R2.csv {run_folder} {run_folder}/Unaligned"
