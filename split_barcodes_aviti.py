@@ -37,14 +37,15 @@ prepath = "/primary/"
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter, description = '''For demultiplexing fastq files''')
 parser.add_argument('run_folder', type=str, default="", help='run folder name')
 parser.add_argument('--sample_sheet', type=str, default="", help='[Optional] Tab delimited barcode sheet "First_barcode\tSecond_barcode\tDescription\tLane". Lane should be 1 or 2. sample sheet will be pulled from Sierra by default')
-parser.add_argument('--lane_number', type=str, default="1", help='Lane number on flow cell i.e. L001 will be 1. Default: 1 !!This option has not been fully implemented!!')
+parser.add_argument('--lane_number', type=str, default="1", help='Lane number on flow cell i.e. L001 will be 1. Default: 1')
 
 #parser.add_argument('--verbose', default=False, action='store_true', help='verbose processing')
 parser.add_argument('--i1_umi', default=False, action='store_true', help='If UMI is present after the barcode in the I1 file. Set barcode length if this is specified')
 parser.add_argument('--i1_trim', type=int, default=0, help='Trim first n bases from I1 (initially used for IDT xGen Stubby Adapter where the first 3 bases need to be removed)')
 parser.add_argument('--i1_revcomp', default=False, action='store_true', help='Reverse complement the I1 sequence')
 parser.add_argument('--i2_revcomp', default=False, action='store_true', help='Reverse complement the I2 sequence')
-parser.add_argument('--barcode_length', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
+parser.add_argument('--barcode_length_i1', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
+parser.add_argument('--barcode_length_i2', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
 
 args=parser.parse_args()
 
@@ -53,7 +54,8 @@ run_folder = args.run_folder
 I1_trim = args.i1_trim
 I1_revcomp = args.i1_revcomp
 I2_revcomp = args.i2_revcomp
-barcode_length = args.barcode_length
+barcode_length_i1 = int(args.barcode_length_i1)
+barcode_length_i2 = int(args.barcode_length_i2)
 i1_umi = args.i1_umi
 lane_number = args.lane_number  # the short lane number i.e. 1 or 2
 sample_sheet = args.sample_sheet
@@ -63,19 +65,19 @@ path_from_run_folder = f"Unaligned/Project_External/Sample_lane{lane_number}/"
 
 def main():
 
-    print(datetime.now())
+    print(datetime.now(), flush = True)
     
     file_location = f"{prepath}{run_folder}/{path_from_run_folder}"
    
-    log_filename = "splitting_info.log"
+    log_filename = "barcode_assignments.txt"
     fhsR1["log"] = open(log_filename, mode = "w")
 
     try:
         if (sample_sheet == ""):
-            print(f"\n Using barcodes from Sierra")
+            print("Using barcodes from Sierra", flush = True)
             expected_barcodes_list = get_expected_barcodes(run_folder, lane_number)
         else:
-            print(f"\n Using custom barcode sheet")
+            print("Using custom barcode sheet", flush = True)
             expected_barcodes_list = get_expected_barcodes_sample_sheet(run_folder, lane_number, sample_sheet)
 
         expected_barcodes = expected_barcodes_list[0]
@@ -83,9 +85,9 @@ def main():
         lane_id = expected_barcodes_list[2] # this is the lane id - not 1 or 2 # but it breaks and returns 1 or 2 if we're using a custom barcode file - we still need to get the lane id properly.
         print(f"barcodes are {expected_barcodes}. \nIs this a double coded library? {double_coded}")
         print(f"lane ID is {lane_id}.")
-        print(f"lane number is {lane_number}.")
+        print(f"lane number is {lane_number}.", flush = True)
 
-        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length, i1_umi, path_from_run_folder, lane_id, lane_number)
+        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number)
 
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!  Is the run folder correct? {run_folder}")
@@ -99,7 +101,7 @@ def main():
 #  do the splitting
 #----------------------------------------------
 
-def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length, i1_umi, path_from_run_folder, lane_id, lane_number):
+def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number):
   
     R1 = get_R1(file_location)
     R2 = get_R2(file_location)
@@ -140,7 +142,7 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
         new_filenameR2 = f"lane{lane_number}_NoCode_L00{lane_number}_R2.fastq.gz"
         open_filehandlesR2(new_filenameR2, "unassigned", path_from_run_folder)
 
-    print("opened all the file handles")
+    print("opened all the file handles", flush = True)
 
     r1 = gzip.open(R1, "rt", encoding="utf8")
     i1 = gzip.open(I1, "rt", encoding="utf8")
@@ -161,7 +163,7 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
         while True:
 
             if line_count % 1000000 == 0:
-                print("Read",(line_count/1000000),"million entries")
+                print("Read",(line_count/1000000),"million entries", flush = True)
 
         #while line_count <= 400: 
             readID_R1  = r1.readline().strip()
@@ -193,15 +195,15 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
             if I1_revcomp:
                 seq_I1 = reverse_complement(seq_I1)
 
-            if i1_umi and barcode_length > 0:
+            if i1_umi and barcode_length_i1 > 0:
                 full_seq_I1 = seq_I1
-                seq_I1 = seq_I1[0:barcode_length]
-                umi = full_seq_I1[barcode_length:]
+                seq_I1 = seq_I1[0:barcode_length_i1]
+                umi = full_seq_I1[barcode_length_i1:]
                 #print(f"umi = {umi}")
                 #readID_R1 += f':{umi}'
                 #print(f"readID_R1 = {readID_R1}")
-            elif barcode_length > 0:
-                seq_I1 = seq_I1[0:barcode_length]
+            elif barcode_length_i1 > 0:
+                seq_I1 = seq_I1[0:barcode_length_i1]
 
             if double_coded:
                 readID_I2  = i2.readline()
@@ -213,6 +215,9 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 if I2_revcomp:
                     seq_I2 = reverse_complement(seq_I2)
 
+                if barcode_length_i2 > 0:
+                    seq_I2 = seq_I2[0:barcode_length_i2]
+
                 barcode = f"{seq_I1}_{seq_I2}"
             
             else:
@@ -223,7 +228,7 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 #print(f"Found it! {barcode} has the name {expected_barcodes[barcode]}")
                 readID_R1 = f"{readID_R1} {barcode}"
 
-                if i1_umi and barcode_length > 0:
+                if i1_umi and barcode_length_i1 > 0:
                     readID_R1 += f':{umi}'
 
                 fhsR1[barcode].stdin.write(readID_R1+"\n")
@@ -234,7 +239,8 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length,
                 if paired_end:
                     readID_R2 = f"{readID_R2} {barcode}"
 
-                    if i1_umi and barcode_length > 0:
+                    # I think we're still just checking whether barcode_length_i1 has been passed in because it should go with --i1_umi
+                    if i1_umi and barcode_length_i1 > 0:
                         readID_R2 += f':{umi}'
 
                     fhsR2[barcode].stdin.write(readID_R2+"\n")
@@ -376,28 +382,39 @@ def get_expected_barcodes_sample_sheet(run_folder, lane_number, sample_sheet):
                     barcode_seq = f"{bc1}_{bc2}"
                 else:
                     barcode_seq = bc1
-                    
+                    print(f"\nbarcode is {barcode_seq}")
+
+
+                print(f"\nsample_name = {sample_name}")    
                 barcode_dict[barcode_seq] = sample_name
                 count += 1
 
-
+            print("finished reading sample sheet") 
         # get the lane ID
         query = (
             f"select lane.id from run,flowcell,lane,barcode " 
             f"WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id " 
             f"AND lane.lane_number='{lane_number}' AND lane.sample_id = barcode.sample_id"
         )
+        #print(f"\nrun_folder = {run_folder}")  
+        #query = (
+      #      f"select lane.id from run WHERE run.run_folder_name = '{run_folder}' and lane.lane_number='{lane_number}'"
+        #)
         cnx = mysql.connector.connect(user='sierrauser', password='', host='bilin2.babraham.ac.uk', database='sierra')
         cursor = cnx.cursor()
         cursor.execute(query)
 
         for (row) in cursor:
-            lane = row[0].strip()
+            #print(f"\nrow = {row}") 
+            #row_type = type(row)
+            #print(f"\ntype of row = {row_type}") 
+            lane = row[0]#.strip() # having.strip() at the end here seemed to remove the whole thing
+            #print(f"\nlane = {lane}")            
 
         return([barcode_dict, double_coded, lane])
 
     except Exception as err:
-        print(f"\n !! Couldn't get expected barcodes !!")
+        print(f"\n !! Couldn't get expected barcodes, something went wrong with getting the lane number from Sierra !!")
         print(err)
 
 
