@@ -46,6 +46,7 @@ parser.add_argument('--i1_revcomp', default=False, action='store_true', help='Re
 parser.add_argument('--i2_revcomp', default=False, action='store_true', help='Reverse complement the I2 sequence')
 parser.add_argument('--barcode_length_i1', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
 parser.add_argument('--barcode_length_i2', type=int, default=0, help='If barcode length differs from actual length of sequences in the index file(s). This defaults to the length of the expected barcodes.')
+parser.add_argument('--switch_i1_i2', default=False, action='store_true', help='Swap all I1 seqs for I2 seqs')
 
 args=parser.parse_args()
 
@@ -59,6 +60,7 @@ barcode_length_i2 = int(args.barcode_length_i2)
 i1_umi = args.i1_umi
 lane_number = args.lane_number  # the short lane number i.e. 1 or 2
 sample_sheet = args.sample_sheet
+switch_i1_i2 = args.switch_i1_i2
 
 path_from_run_folder = f"Unaligned/Project_External/Sample_lane{lane_number}/"
 
@@ -87,7 +89,7 @@ def main():
         print(f"lane ID is {lane_id}.")
         print(f"lane number is {lane_number}.", flush = True)
 
-        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number)
+        split_fastqs(file_location, expected_barcodes, double_coded,  barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number, switch_i1_i2)
 
     except Exception as err:
         print(f"\n !! Couldn't get expected barcodes !!  Is the run folder correct? {run_folder}")
@@ -101,7 +103,7 @@ def main():
 #  do the splitting
 #----------------------------------------------
 
-def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number):
+def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_i1, barcode_length_i2, i1_umi, path_from_run_folder, lane_id, lane_number, switch_i1_i2):
   
     R1 = get_R1(file_location)
     R2 = get_R2(file_location)
@@ -218,7 +220,10 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_
                 if barcode_length_i2 > 0:
                     seq_I2 = seq_I2[0:barcode_length_i2]
 
-                barcode = f"{seq_I1}_{seq_I2}"
+                if switch_i1_i2:
+                    barcode = f"{seq_I2}_{seq_I1}"
+                else:
+                    barcode = f"{seq_I1}_{seq_I2}"
             
             else:
                 barcode = seq_I1
