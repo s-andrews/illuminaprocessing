@@ -1,21 +1,23 @@
 library(dplyr)
 library(ggplot2)
 
-# Usage:  Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder] [lane]
+# Usage:  Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder] [n_seqs_checked] [lane]
 # lane is optional - can only be 1 or 2 (default: 1)
 # It shouldn't matter where the script is run from (as long as it's run on the pipeline server)
 
 cmd_args <- commandArgs(trailingOnly = TRUE)
 #print(cmd_args)
 run_folder <- cmd_args[1]
+n_seqs_checked <- as.integer(cmd_args[2])
 
 print(paste0("run folder is ", run_folder))
+print(paste0("Checking first ", n_seqs_checked, " sequences"))
 
 if (! file.exists(paste0("/primary/", run_folder))) {
     stop("Couldn't find run folder in /primary")
 }
 
-selected_lane <- cmd_args[2]
+selected_lane <- cmd_args[3]
 #print(paste0("selected lane is ", selected_lane))
 # lane can only be 1 or 2, default is 1
 lane <- dplyr::case_when(
@@ -25,7 +27,7 @@ lane <- dplyr::case_when(
 )
 print(paste0("checking barcodes for lane ", lane))
 
-n_seqs_checked <- 10000000
+#n_seqs_checked <- 10000000
 
 #barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane1/")
 barcode_folder <- paste0("/primary/", run_folder, "/Unaligned/Project_External/Sample_lane", lane, "/")
@@ -109,7 +111,8 @@ bar_outer <- c(present = "#0aa192", PhiX = "#a655fb", unexpected = "#f57600", mi
 outfile <- paste0(barcode_folder, "barcode_L00", lane, "_plot.png")
 
 percentage_of_all_data <- round(sum(all_filt$percentage), digits = 0)
-plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of first 10 million reads")
+n_seqs_text <- ifelse(n_seqs_checked == 10000000, "10 million", n_seqs_checked)
+plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of first ", n_seqs_text, " reads")
 #plot_title <- paste0("Barcodes shown explain ", percentage_of_all_data, "% of all sequences")
 
 p <- all_filt |>
