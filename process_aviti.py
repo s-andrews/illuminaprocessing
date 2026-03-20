@@ -9,15 +9,13 @@ from argparse import RawTextHelpFormatter
 # TODO: The barcode checking code has been copied from here to check_barcodes.py, so we should remove the code from here and call that.
 
 # currently needs to be run from /data/AV240405
-# we might move to running it from /data when we make it compatible with MiSeq as well.
 # nohup ~/illuminaprocessing/process_aviti.py [run_folder] > xx.log &
-
-# barcode checking only works for lane1 at the moment
 
 # trim barcodes
 # cut -c -8 i1_head_long.txt > i1_head_trimmed.txt
-# paste -d '_' i1_head_trimmed.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n 110 | sed 's/^\s*//' > found_barcodes.txt
+# paste -d '_' i1_head_trimmed.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n 60 | sed 's/^\s*//' > found_barcodes.txt
 # re-run plotting script
+# Rscript ~/illuminaprocessing/barcode_ggplot.R [runfolder] [lane]
 
 n_fastq_lines = 40000000 # 10 million sequences
 
@@ -183,99 +181,99 @@ def cp_to_primary(run_folder):
 #---------------------
 # quick barcode check
 #---------------------
-def get_barcodes_I1(run_folder):
+# def get_barcodes_I1(run_folder):
 
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' > i1_head.txt"
+#     try:
+#         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
+#         bc_check_cmd = f"zcat lane1_NoIndex_L001_I1.fastq.gz | head -n {n_fastq_lines} | awk 'NR % 4 == 2' > i1_head.txt"
 
-        try:
-            subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
+#         try:
+#             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
             
-        except Exception as err:
-            print("\n !! Couldn't run barcode checking command !!")
-            print(err)
+#         except Exception as err:
+#             print("\n !! Couldn't run barcode checking command !!")
+#             print(err)
             
-    except Exception as err:
-            print("\n !! Couldn't run barcode checking command !!")
-            print(err)
+#     except Exception as err:
+#             print("\n !! Couldn't run barcode checking command !!")
+#             print(err)
 
 
 #---------------------
 # quick barcode check
 #---------------------
-def get_barcodes_I2(run_folder):
+# def get_barcodes_I2(run_folder):
 
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
-        bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' > i2_head.txt"    
+#     try:
+#         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
+#         bc_check_cmd = f"zcat lane1_NoIndex_L001_I2.fastq.gz | head -n {n_fastq_lines}  | awk 'NR % 4 == 2' > i2_head.txt"    
 
-        try:
-            subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
+#         try:
+#             subprocess.run(bc_check_cmd, shell=True, executable="/bin/bash")
             
-        except Exception as err:
-            print("\n !! Couldn't run barcode checking command !!")
-            print(err)
+#         except Exception as err:
+#             print("\n !! Couldn't run barcode checking command !!")
+#             print(err)
             
-    except Exception as err:
-        print("\n !! Couldn't run barcode checking command !!")
-        print(err)
+#     except Exception as err:
+#         print("\n !! Couldn't run barcode checking command !!")
+#         print(err)
 
 #---------------------
 # sort top barcodes
 #---------------------
-def sort_top_barcodes(run_folder, n_bars_to_check, dual_coded):
+# def sort_top_barcodes(run_folder, n_bars_to_check, dual_coded):
 
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
+#     try:
+#         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
 
-        if dual_coded:
-            bc_sort_cmd = f"paste -d '_' i1_head.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
-        else:
-            bc_sort_cmd = f"sort i1_head.txt | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
+#         if dual_coded:
+#             bc_sort_cmd = f"paste -d '_' i1_head.txt i2_head.txt | sort | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
+#         else:
+#             bc_sort_cmd = f"sort i1_head.txt | uniq -c | sort -k 1 -n -r | head -n {n_bars_to_check} | sed 's/^\s*//' > found_barcodes.txt"
 
-        try:
-            subprocess.run(bc_sort_cmd, shell=True, executable="/bin/bash")
+#         try:
+#             subprocess.run(bc_sort_cmd, shell=True, executable="/bin/bash")
             
-        except Exception as err:
-            print("\n !! Couldn't run barcode sorting command !!")
-            print(err)
+#         except Exception as err:
+#             print("\n !! Couldn't run barcode sorting command !!")
+#             print(err)
             
-    except Exception as err:
-        print("\n !! Couldn't run barcode sorting command !!")
-        print(err)
+#     except Exception as err:
+#         print("\n !! Couldn't run barcode sorting command !!")
+#         print(err)
 
 # This writes out the expected barcodes to a text file and returns the number of expected barcodes.
 # The text file is used in the R script.
-def get_expected_barcodes(run_folder):
+# def get_expected_barcodes(run_folder):
 
-    try:
-        os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
+#     try:
+#         os.chdir(f"/primary/{run_folder}/Unaligned/Project_External/Sample_lane1/")
 
-        cnx = mysql.connector.connect(user='sierrauser', password='', host='bilin2.babraham.ac.uk', database='sierra')
-        cursor = cnx.cursor()
+#         cnx = mysql.connector.connect(user='sierrauser', password='', host='bilin2.babraham.ac.uk', database='sierra')
+#         cursor = cnx.cursor()
 
-        # lane_number will always be 1 for aviti and miseq
-        query = (f"select barcode.5_prime_barcode,barcode.3_prime_barcode,barcode.name from run,flowcell,lane,barcode WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id AND lane.lane_number=1 AND lane.sample_id = barcode.sample_id")
+#         # lane_number will always be 1 for aviti and miseq
+#         query = (f"select barcode.5_prime_barcode,barcode.3_prime_barcode,barcode.name from run,flowcell,lane,barcode WHERE run.run_folder_name = '{run_folder}' and run.flowcell_id=flowcell.id AND run.flowcell_id=lane.flowcell_id AND lane.lane_number=1 AND lane.sample_id = barcode.sample_id")
 
-        cursor.execute(query)
-        barcode1_count=0
+#         cursor.execute(query)
+#         barcode1_count=0
 
-        expected_barcodes = open("expected_barcodes.txt", "w")
+#         expected_barcodes = open("expected_barcodes.txt", "w")
 
-        for (row) in cursor:
-            print(row)
-            expected_barcodes.write(f"{row[0]},{row[1]},{row[2]}\n")
-            barcode1_count+=1
+#         for (row) in cursor:
+#             print(row)
+#             expected_barcodes.write(f"{row[0]},{row[1]},{row[2]}\n")
+#             barcode1_count+=1
 
-        expected_barcodes.close()
-        cnx.close()
+#         expected_barcodes.close()
+#         cnx.close()
 
-        return(barcode1_count)
+#         return(barcode1_count)
         
-    except Exception as err:
-        print("\n !! Couldn't get expected barcodes !!")
-        print(err)
+#     except Exception as err:
+#         print("\n !! Couldn't get expected barcodes !!")
+#         print(err)
 
 
 
