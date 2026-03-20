@@ -87,7 +87,7 @@ def main():
 
     print("\nAll done. \nCheck barcode plot before running the barcode splitting script.\n")
 
-
+ 
 
 #---------------------
 # quick barcode check
