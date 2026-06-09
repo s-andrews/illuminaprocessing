@@ -36,7 +36,8 @@ phiX_bc1 <- c("ATGTCGCT", "GCACATAG", "TGTGTCGA", "CACAGATC")
 phiX_bc1_6 <- c("ATGTCG", "GCACAT", "TGTGTC", "CACAGA")
 phiX_dual8 <- c("ATGTCGCT_CTAGCTCG", "GCACATAG_GACTACTA", "TGTGTCGA_TGTCTGAC", "CACAGATC_ACGAGAGT")
 phiX_dual6 <- c("ATGTCG_CTAGCT", "GCACAT_GACTAC", "TGTGTC_TGTCTG", "CACAGA_ACGAGA")
-phiX_dual6_8 <- c("ATGTCG_CTAGCTCG", "GCACAT_GACTACTA", "TGTGTC_TGTCTGAC", "CACAGA_ACGAGAGT")
+phiX_dual6_8 <- c("ATGTCG_CTAGCTCG", "GCACAT_GACTACTA", "TGTGTC_TGTCTGAC", "CACAGA_ACGAGAGT", 
+"CGACAT_CTAGCTCG", "ATGTGC_GACTACTA", "GACACA_TGTCTGAC", "TCTGTG_ACGAGAGT") # last 4 are rev comp I1 as have had this a few times
 
 exp_file <- paste0(barcode_folder, "expected_barcodes.txt")
 found_file <- paste0(barcode_folder, "found_barcodes.txt")
