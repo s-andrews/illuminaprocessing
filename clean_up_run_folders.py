@@ -22,7 +22,8 @@ stats = {
     "Unassigned": [0,0],
     "Unsplit": [0,0],
     "Trimmed": [0,0],
-    "ONTRaw": [0,0]
+    "ONTRaw": [0,0],
+    "AllBAM": [0,0]
 }
 
 folder_savings = {}
@@ -216,6 +217,12 @@ def process_sample_files(files):
             saved_bytes += this_saved_bytes
             continue
 
+        if options.cleanbam:
+            this_saved_bytes = check_allbam(file,files)
+            if this_saved_bytes:
+                saved_bytes += this_saved_bytes
+                continue
+
     return saved_bytes
 
 
@@ -277,6 +284,15 @@ def check_bismark_dedup(file,files):
 
     return 0
 
+
+def check_allbam(file,files):
+    if file.endswith(".bam"):
+        print(files[file], file=delfh)
+        stats["AllBAM"][0] += 1
+        stats["AllBAM"][1] += files[file].stat().st_size
+        return files[file].stat().st_size
+
+    return 0
 
 def check_unwanted_qc(file,files):
 
@@ -443,6 +459,7 @@ def get_options():
 
     parser.add_argument("--min_year", type=int, help="Only run folders older than or equal to this will be processed")
     parser.add_argument("--max_year", type=int, help="Only run folders younger than or equal to this will be processed")
+    parser.add_argument("--cleanbam", action="store_true", help="Remove all BAM files (default false)")
 
     parser.add_argument("--delfile", type=str, default="/dev/null", help="Filename to write deletion commands to to execute cleanup")
 
