@@ -194,9 +194,6 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_
             if I1_trim > 0:
                 seq_I1 = seq_I1[I1_trim:]
 
-            if I1_revcomp:
-                seq_I1 = reverse_complement(seq_I1)
-
             if i1_umi and barcode_length_i1 > 0:
                 full_seq_I1 = seq_I1
                 seq_I1 = seq_I1[0:barcode_length_i1]
@@ -206,6 +203,9 @@ def split_fastqs(file_location, expected_barcodes, double_coded, barcode_length_
                 #print(f"readID_R1 = {readID_R1}")
             elif barcode_length_i1 > 0:
                 seq_I1 = seq_I1[0:barcode_length_i1]
+
+            if I1_revcomp:
+                seq_I1 = reverse_complement(seq_I1)
 
             if double_coded:
                 readID_I2  = i2.readline()
